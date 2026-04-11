@@ -8,6 +8,7 @@ import {
   ChevronRight,
   ChevronDown,
   Plus,
+  Minus,
   Filter,
   Calendar,
   MessageCircle,
@@ -16,6 +17,7 @@ import {
   Users,
   Trash2,
   Edit3,
+  Bot,
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -170,10 +172,25 @@ export default function Memory() {
               <Brain className="h-4 w-4 text-primary" />
               <span className="text-xs font-medium text-primary tracking-wider uppercase">Memory System</span>
             </div>
-            <h1 className="text-3xl font-bold tracking-tight mb-3">Your Knowledge Graph</h1>
-            <p className="text-base text-muted-foreground max-w-xl leading-relaxed">
-              Three layers of memory that evolve with you: working context for the now, episodic records of what happened, and semantic understanding of who you are.
-            </p>
+            <div className="flex items-center justify-between">
+              <div>
+                <h1 className="text-3xl font-bold tracking-tight mb-3">Your Knowledge Graph</h1>
+                <p className="text-base text-muted-foreground max-w-xl leading-relaxed">
+                  Three layers of memory that evolve with you: working context for the now, episodic records of what happened, and semantic understanding of who you are.
+                </p>
+              </div>
+              <div className="hidden lg:block glass rounded-xl p-3 shrink-0">
+                <div className="flex items-center gap-2 text-[10px]">
+                  <Bot className="h-3 w-3 text-primary" />
+                  <span className="text-muted-foreground">Memory Agent</span>
+                  <Plus className="h-2 w-2 text-emerald-400" />
+                  <span className="text-emerald-400">31</span>
+                  <Minus className="h-2 w-2 text-red-400" />
+                  <span className="text-red-400">0</span>
+                  <span className="text-muted-foreground">exec</span>
+                </div>
+              </div>
+            </div>
           </motion.div>
         </div>
       </div>

@@ -5,6 +5,7 @@ import { Route, Switch } from "wouter";
 import ErrorBoundary from "./components/ErrorBoundary";
 import { ThemeProvider } from "./contexts/ThemeContext";
 import AppLayout from "./components/AppLayout";
+import Onboarding from "./pages/Onboarding";
 import Dashboard from "./pages/Dashboard";
 import Advisor from "./pages/Advisor";
 import TwinAgent from "./pages/TwinAgent";
@@ -14,19 +15,27 @@ import Settings from "./pages/Settings";
 
 function Router() {
   return (
-    <AppLayout>
-      <Switch>
-        <Route path="/" component={Dashboard} />
-        <Route path="/advisor" component={Advisor} />
-        <Route path="/twin" component={TwinAgent} />
-        <Route path="/memory" component={Memory} />
-        <Route path="/workspace" component={Workspace} />
-        <Route path="/workspace/:id" component={Workspace} />
-        <Route path="/settings" component={Settings} />
-        <Route path="/404" component={NotFound} />
-        <Route component={NotFound} />
-      </Switch>
-    </AppLayout>
+    <Switch>
+      {/* Onboarding has no sidebar — full screen */}
+      <Route path="/" component={Onboarding} />
+
+      {/* All app pages wrapped in AppLayout with sidebar */}
+      <Route>
+        <AppLayout>
+          <Switch>
+            <Route path="/dashboard" component={Dashboard} />
+            <Route path="/advisor" component={Advisor} />
+            <Route path="/twin" component={TwinAgent} />
+            <Route path="/memory" component={Memory} />
+            <Route path="/workspace" component={Workspace} />
+            <Route path="/workspace/:id" component={Workspace} />
+            <Route path="/settings" component={Settings} />
+            <Route path="/404" component={NotFound} />
+            <Route component={NotFound} />
+          </Switch>
+        </AppLayout>
+      </Route>
+    </Switch>
   );
 }
 

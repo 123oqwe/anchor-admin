@@ -16,7 +16,7 @@ import {
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 
 const navItems = [
-  { path: "/", label: "Dashboard", icon: LayoutDashboard, description: "Human Graph & State" },
+  { path: "/dashboard", label: "Dashboard", icon: LayoutDashboard, description: "Human Graph & State" },
   { path: "/advisor", label: "Advisor", icon: MessageCircle, description: "Decision Conversations" },
   { path: "/twin", label: "Twin Agent", icon: Users, description: "Your Digital Twin" },
   { path: "/memory", label: "Memory", icon: Brain, description: "Knowledge & Records" },
@@ -62,7 +62,7 @@ export default function AppLayout({ children }: { children: ReactNode }) {
         <nav className="flex-1 overflow-y-auto py-4 px-3 custom-scrollbar">
           <div className="space-y-1">
             {navItems.map((item) => {
-              const isActive = item.path === "/" ? location === "/" : location.startsWith(item.path);
+              const isActive = item.path === "/dashboard" ? location === "/dashboard" : location.startsWith(item.path);
               const Icon = item.icon;
               return (
                 <Tooltip key={item.path} delayDuration={collapsed ? 0 : 1000}>

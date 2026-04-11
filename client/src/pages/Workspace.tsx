@@ -3,6 +3,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import {
   FolderKanban,
   Plus,
+  Minus,
   ChevronRight,
   ChevronDown,
   MoreHorizontal,
@@ -15,6 +16,8 @@ import {
   Edit3,
   ArrowRight,
   Search,
+  Bot,
+  Play,
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 
@@ -277,12 +280,23 @@ export default function Workspace() {
             <FolderKanban className="h-4 w-4 text-primary" />
             <span className="text-xs font-medium text-primary tracking-wider uppercase">Workspace</span>
           </div>
-          <div className="flex items-center justify-between">
+            <div className="flex items-center justify-between">
             <div>
               <h1 className="text-3xl font-bold tracking-tight mb-2">Projects</h1>
               <p className="text-sm text-muted-foreground">
                 Organize your goals into projects. Each project is a collection of tasks that move you forward.
               </p>
+              <div className="flex items-center gap-3 mt-2">
+                <div className="flex items-center gap-2 text-[10px]">
+                  <Bot className="h-3 w-3 text-primary" />
+                  <span className="text-muted-foreground">Workspace Agent</span>
+                  <Plus className="h-2 w-2 text-emerald-400" />
+                  <span className="text-emerald-400">12</span>
+                  <Minus className="h-2 w-2 text-red-400" />
+                  <span className="text-red-400">0</span>
+                  <span className="text-muted-foreground">exec</span>
+                </div>
+              </div>
             </div>
             <button
               onClick={() => setShowNewProject(true)}
