@@ -141,6 +141,31 @@ function onTaskCompleted(payload: { taskId: string; title: string }) {
   console.log(`[Twin Agent] +${xpGain} XP (total: ${newXp})`);
 }
 
+// ── GRAPH_UPDATED → Observation Agent ────────────────────────────────────────
+function onGraphUpdated(payload: { nodeId: string; status: string; label: string }) {
+  // 1. 写入 episodic memory — 记录这次图的变化
+  const date = new Date().toLocaleDateString("zh-CN");
+  db.prepare(
+    "INSERT INTO memories (id, user_id, type, title, content, tags, source, confidence) VALUES (?,?,?,?,?,?,?,?)"
+  ).run(
+    nanoid(), DEFAULT_USER_ID,
+    "episodic",
+    `Graph change: ${payload.label}`,
+    `${date}: "${payload.label}" status changed to ${payload.status}. This event was triggered by an approved plan execution.`,
+    JSON.stringify(["graph", "auto", payload.status]),
+    "Observation Agent",
+    0.95
+  );
+
+  // 2. 级联解锁：如果有子节点因此节点而 blocked，现在解锁它们
+  const cascaded = db.prepare(
+    "UPDATE graph_nodes SET status='todo', updated_at=datetime('now') WHERE user_id=? AND status='blocked'"
+  ).run(DEFAULT_USER_ID);
+
+  log("Observation Agent", `Graph change recorded: "${payload.label}" → ${payload.status}${cascaded.changes > 0 ? `, ${cascaded.changes} nodes unblocked` : ""}`);
+  console.log(`[Observation Agent] Graph update recorded. Cascaded: ${cascaded.changes} nodes unblocked.`);
+}
+
 // ── Wire all handlers ────────────────────────────────────────────────────────
 export function startEventHandlers() {
   bus.on("event", (e: AnchorEvent) => {
@@ -149,7 +174,8 @@ export function startEventHandlers() {
       case "EXECUTION_DONE":  onExecutionDone(e.payload);  break;
       case "TWIN_UPDATED":    onTwinUpdated(e.payload);    break;
       case "TASK_COMPLETED":  onTaskCompleted(e.payload);  break;
+      case "GRAPH_UPDATED":   onGraphUpdated(e.payload);   break;
     }
   });
-  console.log("⚡ Event handlers active: DRAFT_APPROVED → Execution → Twin → Memory");
+  console.log("⚡ Event handlers active: DRAFT_APPROVED → Execution → Twin → Memory | GRAPH_UPDATED → Observation");
 }
