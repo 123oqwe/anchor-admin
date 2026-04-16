@@ -5,6 +5,7 @@ import { Route, Switch } from "wouter";
 import ErrorBoundary from "./components/ErrorBoundary";
 import { ThemeProvider } from "./contexts/ThemeContext";
 import AppLayout from "./components/AppLayout";
+import AdminLayout from "./components/AdminLayout";
 import Onboarding from "./pages/Onboarding";
 import Dashboard from "./pages/Dashboard";
 import Advisor from "./pages/Advisor";
@@ -13,14 +14,28 @@ import Memory from "./pages/Memory";
 import Workspace from "./pages/Workspace";
 import Settings from "./pages/Settings";
 import Cortex from "./pages/Cortex";
+import Logs from "./pages/admin/Logs";
+import Data from "./pages/admin/Data";
 
 function Router() {
   return (
     <Switch>
-      {/* Onboarding has no sidebar — full screen */}
+      {/* Onboarding — full screen, no sidebar */}
       <Route path="/" component={Onboarding} />
 
-      {/* All app pages wrapped in AppLayout with sidebar */}
+      {/* Admin — developer console, separate layout */}
+      <Route path="/admin/:rest*">
+        <AdminLayout>
+          <Switch>
+            <Route path="/admin" component={Cortex} />
+            <Route path="/admin/logs" component={Logs} />
+            <Route path="/admin/data" component={Data} />
+            <Route component={NotFound} />
+          </Switch>
+        </AdminLayout>
+      </Route>
+
+      {/* User app — main product */}
       <Route>
         <AppLayout>
           <Switch>
@@ -30,7 +45,6 @@ function Router() {
             <Route path="/memory" component={Memory} />
             <Route path="/workspace" component={Workspace} />
             <Route path="/workspace/:id" component={Workspace} />
-            <Route path="/cortex" component={Cortex} />
             <Route path="/settings" component={Settings} />
             <Route path="/404" component={NotFound} />
             <Route component={NotFound} />

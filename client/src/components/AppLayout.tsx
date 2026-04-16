@@ -8,7 +8,6 @@ import {
   Brain,
   FolderKanban,
   Settings,
-  Cpu,
   ChevronLeft,
   ChevronRight,
   Command,
@@ -22,7 +21,6 @@ const navItems = [
   { path: "/twin", label: "Twin Agent", icon: Users, description: "Your Digital Twin" },
   { path: "/memory", label: "Memory", icon: Brain, description: "Knowledge & Records" },
   { path: "/workspace", label: "Workspace", icon: FolderKanban, description: "Projects & Tasks" },
-  { path: "/cortex", label: "Cortex", icon: Cpu, description: "AI Models & Providers" },
   { path: "/settings", label: "Settings", icon: Settings, description: "Preferences" },
 ];
 
