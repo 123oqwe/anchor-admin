@@ -1,8 +1,8 @@
 import { Router, Request, Response } from "express";
-import { db, DEFAULT_USER_ID } from "../db.js";
+import { db, DEFAULT_USER_ID } from "../infra/storage/db.js";
 import { nanoid } from "nanoid";
-import { bus, type EditableStep, type StepChange } from "../events.js";
-import { text } from "../cortex/index.js";
+import { bus, type EditableStep, type StepChange } from "../orchestration/bus.js";
+import { text } from "../infra/compute/index.js";
 
 const router = Router();
 

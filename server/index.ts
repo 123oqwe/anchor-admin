@@ -5,11 +5,11 @@ import { fileURLToPath } from "url";
 import cookieParser from "cookie-parser";
 
 // Import DB (runs seed on startup)
-import "./db.js";
+import "./infra/storage/db.js";
 
 // Event bus handlers and cron jobs
-import { startEventHandlers } from "./handlers.js";
-import { startCronJobs } from "./cron.js";
+import { startEventHandlers } from "./orchestration/handlers.js";
+import { startCronJobs } from "./orchestration/cron.js";
 
 // Route handlers
 import userRoutes from "./routes/user.js";

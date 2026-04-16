@@ -3,7 +3,7 @@
  * Keys entered via UI are stored in SQLite and take precedence over .env.
  */
 
-import { db } from "../db.js";
+import { db } from "../storage/db.js";
 import { PROVIDERS, MODELS, type Provider, type Model, type Capability } from "./providers.js";
 
 export function getApiKey(providerId: string): string | undefined {

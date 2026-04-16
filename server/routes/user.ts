@@ -1,6 +1,6 @@
 import { Router } from "express";
-import { db, DEFAULT_USER_ID } from "../db.js";
-import { getStatus } from "../cortex/index.js";
+import { db, DEFAULT_USER_ID } from "../infra/storage/db.js";
+import { getStatus } from "../infra/compute/index.js";
 
 const router = Router();
 

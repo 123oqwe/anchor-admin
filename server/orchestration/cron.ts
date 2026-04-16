@@ -1,7 +1,7 @@
 import { schedule } from "node-cron";
-import { db, DEFAULT_USER_ID } from "./db.js";
+import { db, DEFAULT_USER_ID } from "../infra/storage/db.js";
 import { nanoid } from "nanoid";
-import { text } from "./cortex/index.js";
+import { text } from "../infra/compute/index.js";
 
 function log(agent: string, action: string, status = "success") {
   db.prepare("INSERT INTO agent_executions (id, user_id, agent, action, status) VALUES (?,?,?,?,?)")

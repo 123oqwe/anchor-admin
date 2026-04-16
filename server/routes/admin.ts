@@ -1,12 +1,12 @@
 import { Router } from "express";
-import { setApiKey, deleteApiKey, getApiKey } from "../cortex/keys.js";
-import { PROVIDERS, MODELS } from "../cortex/providers.js";
-import { getCapabilityRoster } from "../cortex/index.js";
+import { setApiKey, deleteApiKey, getApiKey } from "../infra/compute/keys.js";
+import { PROVIDERS, MODELS } from "../infra/compute/providers.js";
+import { getCapabilityRoster } from "../infra/compute/index.js";
 import {
   getCostSummary, getPerformanceSummary, getRecentCalls, getCallDetail,
   getRouteOverride, setRouteOverride, clearRouteOverride, getAllOverrides,
-} from "../cortex/telemetry.js";
-import { TASK_ROUTES } from "../cortex/router.js";
+} from "../infra/compute/telemetry.js";
+import { TASK_ROUTES } from "../infra/compute/router.js";
 import { createAnthropic } from "@ai-sdk/anthropic";
 import { createOpenAI } from "@ai-sdk/openai";
 import { createGoogleGenerativeAI } from "@ai-sdk/google";

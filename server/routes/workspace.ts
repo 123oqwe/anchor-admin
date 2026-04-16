@@ -1,7 +1,7 @@
 import { Router } from "express";
-import { db, DEFAULT_USER_ID } from "../db.js";
+import { db, DEFAULT_USER_ID } from "../infra/storage/db.js";
 import { nanoid } from "nanoid";
-import { bus } from "../events.js";
+import { bus } from "../orchestration/bus.js";
 
 const router = Router();
 

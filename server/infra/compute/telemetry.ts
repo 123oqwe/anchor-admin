@@ -1,7 +1,7 @@
 /**
  * Cortex Telemetry — logs every LLM call with cost, latency, tokens, payloads.
  */
-import { db } from "../db.js";
+import { db } from "../storage/db.js";
 import { nanoid } from "nanoid";
 import { estimateCost } from "./providers.js";
 
