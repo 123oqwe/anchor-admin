@@ -1,0 +1,69 @@
+/**
+ * L1 Human Graph — Writer.
+ *
+ * Mutation operations on the graph. Only L5 Execution and L4 Orchestration
+ * (for system-triggered updates like decay) should call these.
+ * All writes go through here — no raw SQL elsewhere.
+ */
+import { db, DEFAULT_USER_ID } from "../infra/storage/db.js";
+import { nanoid } from "nanoid";
+import { type NodeType, type Domain } from "./ontology.js";
+
+// ── Node mutations ──────────────────────────────────────────────────────────
+
+export interface CreateNodeInput {
+  domain: Domain | string;
+  label: string;
+  type: NodeType | string;
+  status: string;
+  captured: string;
+  detail: string;
+}
+
+export function createNode(input: CreateNodeInput): string {
+  const id = nanoid();
+  db.prepare(
+    "INSERT INTO graph_nodes (id, user_id, domain, label, type, status, captured, detail) VALUES (?,?,?,?,?,?,?,?)"
+  ).run(id, DEFAULT_USER_ID, input.domain, input.label, input.type, input.status, input.captured, input.detail);
+  return id;
+}
+
+export function updateNodeStatus(nodeId: string, newStatus: string): boolean {
+  const result = db.prepare(
+    "UPDATE graph_nodes SET status=?, updated_at=datetime('now') WHERE id=? AND user_id=?"
+  ).run(newStatus, nodeId, DEFAULT_USER_ID);
+  return result.changes > 0;
+}
+
+export function updateNodeDetail(nodeId: string, detail: string): boolean {
+  const result = db.prepare(
+    "UPDATE graph_nodes SET detail=?, updated_at=datetime('now') WHERE id=? AND user_id=?"
+  ).run(detail, nodeId, DEFAULT_USER_ID);
+  return result.changes > 0;
+}
+
+export function deleteNode(nodeId: string): boolean {
+  const result = db.prepare(
+    "DELETE FROM graph_nodes WHERE id=? AND user_id=?"
+  ).run(nodeId, DEFAULT_USER_ID);
+  return result.changes > 0;
+}
+
+// ── Batch operations (used by L4 cron / decay) ──────────────────────────────
+
+/** Mark nodes as decaying if not updated in N days. */
+export function markStaleAsDecaying(daysSinceUpdate: number): number {
+  const result = db.prepare(`
+    UPDATE graph_nodes SET status='decaying', updated_at=datetime('now')
+    WHERE user_id=? AND status IN ('active','opportunity') AND julianday('now') - julianday(updated_at) > ?
+  `).run(DEFAULT_USER_ID, daysSinceUpdate);
+  return result.changes;
+}
+
+/** Unlock blocked nodes (cascade after a node becomes active). */
+export function unlockBlockedNodes(): number {
+  const result = db.prepare(
+    "UPDATE graph_nodes SET status='todo', updated_at=datetime('now') WHERE user_id=? AND status='blocked'"
+  ).run(DEFAULT_USER_ID);
+  return result.changes;
+}

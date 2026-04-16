@@ -8,6 +8,7 @@ import { bus } from "../orchestration/bus.js";
 import { nanoid } from "nanoid";
 import { checkPermission } from "../permission/gate.js";
 import { type ActionClass } from "../permission/levels.js";
+import { writeMemory } from "../memory/retrieval.js";
 
 function log(agent: string, action: string, status = "success") {
   db.prepare("INSERT INTO agent_executions (id, user_id, agent, action, status) VALUES (?,?,?,?,?)")
@@ -57,8 +58,7 @@ export const INTERNAL_TOOLS: ToolDef[] = [
     actionClass: "write_memory",
     input_schema: { type: "object", properties: { summary: { type: "string" } }, required: ["summary"] },
     execute: (input: any) => {
-      db.prepare("INSERT INTO memories (id, user_id, type, title, content, tags, source, confidence) VALUES (?,?,?,?,?,?,?,?)")
-        .run(nanoid(), DEFAULT_USER_ID, "episodic", "Execution Outcome", input.summary, JSON.stringify(["execution", "auto"]), "Execution Agent", 0.9);
+      writeMemory({ type: "episodic", title: "Execution Outcome", content: input.summary, tags: ["execution", "auto"], source: "Execution Agent", confidence: 0.9 });
       log("Execution Agent", `Outcome: ${input.summary.slice(0, 50)}`);
       return "Recorded.";
     },

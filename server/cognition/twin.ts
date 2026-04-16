@@ -7,6 +7,7 @@ import { nanoid } from "nanoid";
 import { db, DEFAULT_USER_ID } from "../infra/storage/db.js";
 import { bus, type StepChange } from "../orchestration/bus.js";
 import { text } from "../infra/compute/index.js";
+import { writeMemory, writeTwinInsight } from "../memory/retrieval.js";
 
 function log(agent: string, action: string, status = "success") {
   db.prepare("INSERT INTO agent_executions (id, user_id, agent, action, status) VALUES (?,?,?,?,?)")
@@ -38,8 +39,7 @@ export async function twinLearnFromEdits(changes: StepChange[]) {
     if (!jsonMatch) return;
     const parsed = JSON.parse(jsonMatch[0]);
     if (parsed?.insight) {
-      db.prepare("INSERT INTO twin_insights (id, user_id, category, insight, confidence) VALUES (?,?,?,?,?)")
-        .run(nanoid(), DEFAULT_USER_ID, parsed.category ?? "behavior", parsed.insight, parsed.confidence ?? 0.7);
+      writeTwinInsight({ category: parsed.category ?? "behavior", insight: parsed.insight, confidence: parsed.confidence ?? 0.7 });
       log("Twin Agent", `Edit insight: ${parsed.insight.slice(0, 60)}`);
       bus.publish({ type: "TWIN_UPDATED", payload: { insight: parsed.insight } });
     }
@@ -66,10 +66,8 @@ export async function twinLearnFromResults(payload: { steps_result: any[]; plan_
     if (!jsonMatch) return;
     const parsed = JSON.parse(jsonMatch[0]);
     if (parsed?.insight) {
-      db.prepare("INSERT INTO twin_insights (id, user_id, category, insight, confidence) VALUES (?,?,?,?,?)")
-        .run(nanoid(), DEFAULT_USER_ID, parsed.category ?? "behavior", parsed.insight, parsed.confidence ?? 0.7);
-      db.prepare("INSERT INTO memories (id, user_id, type, title, content, tags, source, confidence) VALUES (?,?,?,?,?,?,?,?)")
-        .run(nanoid(), DEFAULT_USER_ID, "episodic", "Execution Result", `Plan: ${payload.plan_summary}. ${payload.steps_result.length} steps.`, JSON.stringify(["execution", "result"]), "Execution Agent", 0.9);
+      writeTwinInsight({ category: parsed.category ?? "behavior", insight: parsed.insight, confidence: parsed.confidence ?? 0.7 });
+      writeMemory({ type: "episodic", title: "Execution Result", content: `Plan: ${payload.plan_summary}. ${payload.steps_result.length} steps.`, tags: ["execution", "result"], source: "Execution Agent", confidence: 0.9 });
       log("Twin Agent", `Result insight: ${parsed.insight.slice(0, 60)}`);
       bus.publish({ type: "TWIN_UPDATED", payload: { insight: parsed.insight } });
     }

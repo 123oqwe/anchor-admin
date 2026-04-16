@@ -1,41 +1,15 @@
+/**
+ * L7 Transport — Advisor routes.
+ * Thin HTTP boundary. All business logic delegated to L3 cognition, L2 memory, L4 orchestration.
+ */
 import { Router, Request, Response } from "express";
 import { db, DEFAULT_USER_ID } from "../infra/storage/db.js";
 import { nanoid } from "nanoid";
 import { bus, type EditableStep, type StepChange } from "../orchestration/bus.js";
 import { text } from "../infra/compute/index.js";
+import { decide } from "../cognition/decision.js";
 
 const router = Router();
-
-// ── helpers ─────────────────────────────────────────────────────────────────
-
-function getGraphContext(): string {
-  const nodes = db.prepare("SELECT domain, label, type, status, detail FROM graph_nodes WHERE user_id=? ORDER BY domain").all(DEFAULT_USER_ID) as any[];
-  if (!nodes.length) return "No Human Graph data yet.";
-  const byDomain: Record<string, string[]> = {};
-  for (const n of nodes) {
-    if (!byDomain[n.domain]) byDomain[n.domain] = [];
-    byDomain[n.domain].push(`  - [${n.type}] ${n.label} (${n.status}): ${n.detail}`);
-  }
-  return Object.entries(byDomain).map(([d, items]) => `${d.toUpperCase()}:\n${items.join("\n")}`).join("\n\n");
-}
-
-function getMemoryContext(): string {
-  const mems = db.prepare("SELECT type, title, content FROM memories WHERE user_id=? ORDER BY created_at DESC LIMIT 10").all(DEFAULT_USER_ID) as any[];
-  if (!mems.length) return "No memory data yet.";
-  return mems.map(m => `[${m.type}] ${m.title}: ${m.content}`).join("\n");
-}
-
-function getTwinContext(): string {
-  const insights = db.prepare("SELECT category, insight, confidence FROM twin_insights WHERE user_id=?").all(DEFAULT_USER_ID) as any[];
-  if (!insights.length) return "No behavioral insights yet.";
-  return insights.map(i => `${i.category} (${Math.round(i.confidence * 100)}% confidence): ${i.insight}`).join("\n");
-}
-
-function getStateContext(): string {
-  const s = db.prepare("SELECT energy, focus, stress FROM user_state WHERE user_id=?").get(DEFAULT_USER_ID) as any;
-  if (!s) return "";
-  return `Current state — Energy: ${s.energy}/100, Focus: ${s.focus}/100, Stress: ${s.stress}/100`;
-}
 
 function logExecution(agent: string, action: string, status = "success") {
   db.prepare("INSERT INTO agent_executions (id, user_id, agent, action, status) VALUES (?,?,?,?,?)")
@@ -60,72 +34,27 @@ router.post("/personal", async (req: Request, res: Response) => {
   const { message } = req.body;
   if (!message) return res.status(400).json({ error: "message required" });
 
-  const systemPrompt = `You are Anchor's Decision Agent. You know the user through their Human Graph and behavioral patterns.
-
-${getStateContext()}
-
-HUMAN GRAPH:
-${getGraphContext()}
-
-BEHAVIORAL MEMORY:
-${getMemoryContext()}
-
-TWIN INSIGHTS (user behavioral priors):
-${getTwinContext()}
-
-RULES:
-1. For actionable requests, respond with a JSON object containing editable steps the user can modify.
-2. For conversational questions, respond with plain text advice (2-3 sentences, direct, personal).
-3. When producing steps, reference specific items from the graph. Factor in twin insights.
-4. Always output valid JSON when you detect the user wants a plan, action, or task list.
-
-JSON FORMAT (when actionable):
-{
-  "type": "plan",
-  "suggestion_summary": "One sentence explaining your recommendation",
-  "reasoning": "Why this approach, referencing graph/twin data",
-  "editable_steps": [
-    { "id": 1, "content": "Specific action", "time_estimate": "20min" },
-    { "id": 2, "content": "Another action", "time_estimate": "1h" }
-  ],
-  "risk_level": "low" | "high",
-  "referenced_nodes": ["node labels referenced"]
-}
-
-PLAIN TEXT FORMAT (when conversational):
-Just respond naturally in 2-3 sentences. Be direct and personal.`;
-
   try {
+    // Load conversation history
     const historyRows = db.prepare("SELECT role, content FROM messages WHERE user_id=? AND mode='personal' ORDER BY created_at DESC LIMIT 10").all(DEFAULT_USER_ID) as any[];
-    const historyMsgs = historyRows.reverse().map(r => ({ role: (r.role === "user" ? "user" : "assistant") as "user" | "assistant", content: r.content as string }));
+    const history = historyRows.reverse().map(r => ({ role: (r.role === "user" ? "user" : "assistant") as "user" | "assistant", content: r.content as string }));
 
-    const raw = await text({
-      task: "decision",
-      system: systemPrompt,
-      messages: [...historyMsgs, { role: "user" as const, content: message }],
-      maxTokens: 1024,
-    });
+    // L3 Cognition — pure reasoning
+    const result = await decide(message, history);
 
-    let parsed: any = null;
-    try {
-      const jsonMatch = raw.match(/\{[\s\S]*\}/);
-      if (jsonMatch) parsed = JSON.parse(jsonMatch[0]);
-    } catch {}
-
-    const isPlan = parsed?.type === "plan" && Array.isArray(parsed?.editable_steps);
+    // Persist to messages
     const msgId = nanoid();
-
     const insertMsg = db.prepare("INSERT INTO messages (id, user_id, mode, role, content, draft_type, draft_status, agent_name) VALUES (?,?,?,?,?,?,?,?)");
     insertMsg.run(nanoid(), DEFAULT_USER_ID, "personal", "user", message, null, null, null);
-    insertMsg.run(msgId, DEFAULT_USER_ID, "personal", isPlan ? "draft" : "advisor", raw, isPlan ? "plan" : null, isPlan ? "pending" : null, null);
+    insertMsg.run(msgId, DEFAULT_USER_ID, "personal", result.isPlan ? "draft" : "advisor", result.raw, result.isPlan ? "plan" : null, result.isPlan ? "pending" : null, null);
 
-    logExecution("Decision Agent", `${isPlan ? "Plan" : "Advice"}: ${message.substring(0, 60)}`);
+    logExecution("Decision Agent", `${result.isPlan ? "Plan" : "Advice"}: ${message.substring(0, 60)}`);
 
     res.json({
-      id: msgId, role: isPlan ? "draft" : "advisor", content: raw,
+      id: msgId, role: result.isPlan ? "draft" : "advisor", content: result.raw,
       timestamp: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
-      draftType: isPlan ? "plan" : undefined, draftStatus: isPlan ? "pending" : undefined,
-      structured: isPlan ? parsed : undefined,
+      draftType: result.isPlan ? "plan" : undefined, draftStatus: result.isPlan ? "pending" : undefined,
+      structured: result.structured,
     });
   } catch (err: any) {
     console.error("Decision Agent error:", err);
@@ -167,12 +96,12 @@ router.post("/general", async (req: Request, res: Response) => {
 
   try {
     const historyRows = db.prepare("SELECT role, content FROM messages WHERE user_id=? AND mode='general' ORDER BY created_at DESC LIMIT 10").all(DEFAULT_USER_ID) as any[];
-    const historyMsgs = historyRows.reverse().map(r => ({ role: (r.role === "user" ? "user" : "assistant") as "user" | "assistant", content: r.content as string }));
+    const history = historyRows.reverse().map(r => ({ role: (r.role === "user" ? "user" : "assistant") as "user" | "assistant", content: r.content as string }));
 
     const content = await text({
       task: "general_chat",
       system: "You are a general-purpose AI assistant embedded in Anchor OS. No access to personal data in this mode. Be concise and helpful.",
-      messages: [...historyMsgs, { role: "user" as const, content: message }],
+      messages: [...history, { role: "user" as const, content: message }],
       maxTokens: 2048,
     });
 
