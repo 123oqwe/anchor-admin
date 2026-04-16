@@ -12,6 +12,7 @@ import TwinAgent from "./pages/TwinAgent";
 import Memory from "./pages/Memory";
 import Workspace from "./pages/Workspace";
 import Settings from "./pages/Settings";
+import Cortex from "./pages/Cortex";
 
 function Router() {
   return (
@@ -29,6 +30,7 @@ function Router() {
             <Route path="/memory" component={Memory} />
             <Route path="/workspace" component={Workspace} />
             <Route path="/workspace/:id" component={Workspace} />
+            <Route path="/cortex" component={Cortex} />
             <Route path="/settings" component={Settings} />
             <Route path="/404" component={NotFound} />
             <Route component={NotFound} />

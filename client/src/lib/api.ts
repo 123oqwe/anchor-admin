@@ -66,4 +66,7 @@ export const api = {
   confirmPlan: (original_steps: any[], user_steps: any[]) => req<any>("POST", "/api/advisor/confirm", { original_steps, user_steps }),
   rejectDraft: (id: string) => req("POST", `/api/advisor/drafts/${id}/reject`, {}),
   scanOnboarding: () => req<any>("POST", "/api/advisor/onboarding/scan", {}),
+
+  // Cortex
+  getCortexStatus: () => req<any>("GET", "/api/user/models"),
 };
