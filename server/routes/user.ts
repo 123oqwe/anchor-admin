@@ -1,5 +1,6 @@
 import { Router } from "express";
 import { db, DEFAULT_USER_ID } from "../db.js";
+import { getRoutingStatus, hasKey, TIER_PREFERENCES, ROUTING_TABLE } from "../router.js";
 
 const router = Router();
 
@@ -61,6 +62,16 @@ router.put("/settings/:section", (req, res) => {
       .run(...Object.values(filtered), DEFAULT_USER_ID);
   }
   res.json({ ok: true });
+});
+
+router.get("/models", (_req, res) => {
+  const routing = getRoutingStatus();
+  const allModels = Array.from(new Set(Object.values(TIER_PREFERENCES).flat()));
+  const models = allModels.map(id => ({
+    id,
+    available: hasKey(id),
+  }));
+  res.json({ routing, models });
 });
 
 export default router;
