@@ -1,7 +1,12 @@
 import { Router } from "express";
 import { setApiKey, deleteApiKey, getApiKey } from "../cortex/keys.js";
-import { PROVIDERS } from "../cortex/providers.js";
+import { PROVIDERS, MODELS } from "../cortex/providers.js";
 import { getCapabilityRoster } from "../cortex/index.js";
+import {
+  getCostSummary, getPerformanceSummary, getRecentCalls, getCallDetail,
+  getRouteOverride, setRouteOverride, clearRouteOverride, getAllOverrides,
+} from "../cortex/telemetry.js";
+import { TASK_ROUTES } from "../cortex/router.js";
 import { createAnthropic } from "@ai-sdk/anthropic";
 import { createOpenAI } from "@ai-sdk/openai";
 import { createGoogleGenerativeAI } from "@ai-sdk/google";
@@ -105,6 +110,50 @@ router.post("/providers/:id/test", async (req, res) => {
       error: err.message?.slice(0, 200) ?? "Unknown error",
     });
   }
+});
+
+// ── Telemetry: costs + performance ──────────────────────────────────────────
+
+router.get("/costs", (req, res) => {
+  const days = parseInt(req.query.days as string) || 7;
+  res.json(getCostSummary(days));
+});
+
+router.get("/performance", (req, res) => {
+  const days = parseInt(req.query.days as string) || 7;
+  res.json(getPerformanceSummary(days));
+});
+
+router.get("/calls", (req, res) => {
+  const limit = parseInt(req.query.limit as string) || 100;
+  res.json(getRecentCalls(limit));
+});
+
+router.get("/calls/:id", (req, res) => {
+  const call = getCallDetail(req.params.id);
+  if (!call) return res.status(404).json({ error: "Not found" });
+  res.json(call);
+});
+
+// ── Route overrides ─────────────────────────────────────────────────────────
+
+router.get("/overrides", (_req, res) => {
+  res.json(getAllOverrides());
+});
+
+router.put("/overrides/:task", (req, res) => {
+  const { modelId } = req.body;
+  if (!modelId) return res.status(400).json({ error: "modelId required" });
+  const task = req.params.task;
+  if (!TASK_ROUTES[task]) return res.status(400).json({ error: "Unknown task" });
+  if (!MODELS.find(m => m.id === modelId)) return res.status(400).json({ error: "Unknown model" });
+  setRouteOverride(task, modelId);
+  res.json({ ok: true });
+});
+
+router.delete("/overrides/:task", (req, res) => {
+  clearRouteOverride(req.params.task);
+  res.json({ ok: true });
 });
 
 export default router;

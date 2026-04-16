@@ -82,6 +82,71 @@ export interface Model {
   name: string;
   capabilities: Capability[];
   tier: "frontier" | "strong" | "balanced" | "fast" | "cheap";
+  // pricing in USD per 1M tokens
+  priceIn?: number;
+  priceOut?: number;
+}
+
+/** USD per 1M tokens — approximate public pricing as of 2025 Q4. */
+export const MODEL_PRICING: Record<string, { in: number; out: number }> = {
+  "claude-opus-4-6":             { in: 15.00, out: 75.00 },
+  "claude-sonnet-4-6":           { in: 3.00,  out: 15.00 },
+  "claude-haiku-4-5-20251001":   { in: 0.80,  out: 4.00 },
+  "gpt-4o":                      { in: 2.50,  out: 10.00 },
+  "gpt-4o-mini":                 { in: 0.15,  out: 0.60 },
+  "gpt-4.1":                     { in: 3.00,  out: 12.00 },
+  "gpt-4.1-mini":                { in: 0.40,  out: 1.60 },
+  "gpt-4.1-nano":                { in: 0.10,  out: 0.40 },
+  "o3":                          { in: 15.00, out: 60.00 },
+  "o3-mini":                     { in: 1.10,  out: 4.40 },
+  "o4-mini":                     { in: 1.10,  out: 4.40 },
+  "gemini-2.5-pro-preview-06-05":   { in: 1.25,  out: 10.00 },
+  "gemini-2.5-flash-preview-05-20": { in: 0.30,  out: 2.50 },
+  "gemini-2.0-flash":            { in: 0.10,  out: 0.40 },
+  "deepseek-chat":               { in: 0.27,  out: 1.10 },
+  "deepseek-reasoner":           { in: 0.55,  out: 2.19 },
+  "qwen-max":                    { in: 1.60,  out: 6.40 },
+  "qwen-plus":                   { in: 0.40,  out: 1.20 },
+  "qwen-turbo":                  { in: 0.05,  out: 0.20 },
+  "qwq-plus":                    { in: 0.35,  out: 1.05 },
+  "mistral-large-latest":        { in: 2.00,  out: 6.00 },
+  "mistral-small-latest":        { in: 0.20,  out: 0.60 },
+  "codestral-latest":            { in: 0.30,  out: 0.90 },
+  "grok-3":                      { in: 3.00,  out: 15.00 },
+  "grok-3-mini":                 { in: 0.30,  out: 0.50 },
+  "command-r-plus":              { in: 2.50,  out: 10.00 },
+  "command-r":                   { in: 0.15,  out: 0.60 },
+  "glm-4-plus":                  { in: 0.70,  out: 0.70 },
+  "glm-4-flash":                 { in: 0.00,  out: 0.00 },
+  "minimax-m2.7":                { in: 0.30,  out: 1.20 },
+  "kimi-k2.5":                   { in: 0.60,  out: 2.50 },
+  "ernie-4.5":                   { in: 0.55,  out: 2.20 },
+  "ernie-x1":                    { in: 0.28,  out: 1.10 },
+  "doubao-seed-2.0-pro":         { in: 0.43,  out: 2.15 },
+  "doubao-seed-2.0-mini":        { in: 0.07,  out: 0.28 },
+  "step-3.5-flash":              { in: 0.10,  out: 0.30 },
+  "yi-large":                    { in: 3.00,  out: 3.00 },
+  "jamba-large-1.7":             { in: 2.00,  out: 8.00 },
+  "reka-core":                   { in: 2.00,  out: 6.00 },
+  "reka-flash":                  { in: 0.40,  out: 1.00 },
+  "llama-4-scout-17b-16e-instruct":       { in: 0.11,  out: 0.34 },
+  "llama-3.3-70b-versatile":              { in: 0.59,  out: 0.79 },
+  "meta-llama/Llama-4-Maverick-17B-128E-Instruct-FP8": { in: 0.27, out: 0.85 },
+  "meta-llama/Llama-3.3-70B-Instruct-Turbo":           { in: 0.88, out: 0.88 },
+  "sonar-pro":                   { in: 3.00,  out: 15.00 },
+  "sonar":                       { in: 1.00,  out: 1.00 },
+  "text-embedding-3-large":      { in: 0.13,  out: 0 },
+  "text-embedding-3-small":      { in: 0.02,  out: 0 },
+};
+
+export function getPricing(modelId: string) {
+  return MODEL_PRICING[modelId];
+}
+
+export function estimateCost(modelId: string, inputTokens: number, outputTokens: number): number {
+  const p = MODEL_PRICING[modelId];
+  if (!p) return 0;
+  return (inputTokens * p.in + outputTokens * p.out) / 1_000_000;
 }
 
 export const MODELS: Model[] = [

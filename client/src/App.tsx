@@ -10,39 +10,40 @@ import Onboarding from "./pages/Onboarding";
 import Dashboard from "./pages/Dashboard";
 import Advisor from "./pages/Advisor";
 import TwinAgent from "./pages/TwinAgent";
-import Memory from "./pages/Memory";
+import MemoryUser from "./pages/Memory";
 import Workspace from "./pages/Workspace";
 import Settings from "./pages/Settings";
 import Cortex from "./pages/Cortex";
 import Logs from "./pages/admin/Logs";
 import Data from "./pages/admin/Data";
+import Costs from "./pages/admin/Costs";
+import Performance from "./pages/admin/Performance";
+import GraphAdmin from "./pages/admin/Graph";
+import MemoryAdmin from "./pages/admin/Memory";
 
 function Router() {
   return (
     <Switch>
-      {/* Onboarding — full screen, no sidebar */}
+      {/* Admin routes */}
+      <Route path="/admin"><AdminLayout><Cortex /></AdminLayout></Route>
+      <Route path="/admin/costs"><AdminLayout><Costs /></AdminLayout></Route>
+      <Route path="/admin/performance"><AdminLayout><Performance /></AdminLayout></Route>
+      <Route path="/admin/logs"><AdminLayout><Logs /></AdminLayout></Route>
+      <Route path="/admin/graph"><AdminLayout><GraphAdmin /></AdminLayout></Route>
+      <Route path="/admin/memory"><AdminLayout><MemoryAdmin /></AdminLayout></Route>
+      <Route path="/admin/data"><AdminLayout><Data /></AdminLayout></Route>
+
+      {/* Onboarding */}
       <Route path="/" component={Onboarding} />
 
-      {/* Admin — developer console, separate layout */}
-      <Route path="/admin/:rest*">
-        <AdminLayout>
-          <Switch>
-            <Route path="/admin" component={Cortex} />
-            <Route path="/admin/logs" component={Logs} />
-            <Route path="/admin/data" component={Data} />
-            <Route component={NotFound} />
-          </Switch>
-        </AdminLayout>
-      </Route>
-
-      {/* User app — main product */}
+      {/* User app */}
       <Route>
         <AppLayout>
           <Switch>
             <Route path="/dashboard" component={Dashboard} />
             <Route path="/advisor" component={Advisor} />
             <Route path="/twin" component={TwinAgent} />
-            <Route path="/memory" component={Memory} />
+            <Route path="/memory" component={MemoryUser} />
             <Route path="/workspace" component={Workspace} />
             <Route path="/workspace/:id" component={Workspace} />
             <Route path="/settings" component={Settings} />

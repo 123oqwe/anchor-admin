@@ -18,6 +18,7 @@ import { createGoogleGenerativeAI } from "@ai-sdk/google";
 import { getCandidates, routeTask, TASK_ROUTES } from "./router.js";
 import { PROVIDERS, MODELS, type Model, type Capability } from "./providers.js";
 import { getApiKey, getAllKeyStatuses, getModelsForCapability, getActiveProviders, getAllProviderSlots } from "./keys.js";
+import { logCall, acquireRateLimit, getRouteOverride } from "./telemetry.js";
 
 // ── Provider factory ────────────────────────────────────────────────────────
 
@@ -45,21 +46,72 @@ function createModelInstance(model: Model) {
 
 // ── Fallback execution ──────────────────────────────────────────────────────
 
-async function withFallback<T>(task: string, fn: (model: Model) => Promise<T>): Promise<T> {
+interface FnResult<T> {
+  value: T;
+  usage?: { inputTokens?: number; outputTokens?: number };
+  responsePreview?: string;
+}
+
+async function withFallback<T>(
+  task: string,
+  fn: (model: Model) => Promise<FnResult<T>>,
+  telemetryMeta?: { inputPreview?: string }
+): Promise<T> {
   const route = TASK_ROUTES[task];
   if (!route) throw new Error(`Unknown task: ${task}`);
 
-  const candidates = getCandidates(route.capability, route.tier);
+  let candidates: Model[];
+  const overrideId = getRouteOverride(task);
+  if (overrideId) {
+    const override = MODELS.find(m => m.id === overrideId);
+    if (override) {
+      candidates = [override, ...getCandidates(route.capability, route.tier).filter(m => m.id !== overrideId)];
+      console.log(`[Cortex] ${task} manual override → ${override.name}`);
+    } else {
+      candidates = getCandidates(route.capability, route.tier);
+    }
+  } else {
+    candidates = getCandidates(route.capability, route.tier);
+  }
+
   if (candidates.length === 0) {
     throw new Error(`No model available for task "${task}" (capability: ${route.capability}). Add an API key.`);
   }
 
   for (let i = 0; i < candidates.length; i++) {
+    const model = candidates[i];
+    const start = Date.now();
     try {
-      console.log(`[Cortex] ${task} → ${candidates[i].name} (${candidates[i].provider})`);
-      return await fn(candidates[i]);
+      await acquireRateLimit(model.provider);
+      console.log(`[Cortex] ${task} → ${model.name} (${model.provider})`);
+      const res = await fn(model);
+
+      logCall({
+        task,
+        capability: route.capability,
+        modelId: model.id,
+        providerId: model.provider,
+        inputTokens: res.usage?.inputTokens,
+        outputTokens: res.usage?.outputTokens,
+        latencyMs: Date.now() - start,
+        status: i > 0 ? "fallback" : "success",
+        requestPreview: telemetryMeta?.inputPreview?.slice(0, 500),
+        responsePreview: res.responsePreview?.slice(0, 500),
+      });
+      return res.value;
     } catch (err: any) {
-      console.error(`[Cortex] ${candidates[i].name} failed:`, err.message?.slice(0, 100));
+      const msg = err.message?.slice(0, 200) ?? "Unknown error";
+      console.error(`[Cortex] ${model.name} failed:`, msg);
+      logCall({
+        task,
+        capability: route.capability,
+        modelId: model.id,
+        providerId: model.provider,
+        latencyMs: Date.now() - start,
+        status: "failed",
+        error: msg,
+        requestPreview: telemetryMeta?.inputPreview?.slice(0, 500),
+      });
       if (i === candidates.length - 1) throw err;
     }
   }
@@ -77,7 +129,8 @@ export async function text(opts: {
   messages: { role: "user" | "assistant"; content: string }[];
   maxTokens?: number;
 }): Promise<string> {
-  return withFallback(opts.task, async (model) => {
+  const lastMsg = opts.messages[opts.messages.length - 1]?.content ?? "";
+  return withFallback<string>(opts.task, async (model) => {
     const instance = createModelInstance(model);
     const result = await generateText({
       model: instance,
@@ -85,8 +138,15 @@ export async function text(opts: {
       messages: opts.messages as ModelMessage[],
       maxOutputTokens: opts.maxTokens ?? 1024,
     });
-    return result.text;
-  });
+    return {
+      value: result.text,
+      usage: {
+        inputTokens: (result.usage as any)?.inputTokens ?? (result.usage as any)?.promptTokens,
+        outputTokens: (result.usage as any)?.outputTokens ?? (result.usage as any)?.completionTokens,
+      },
+      responsePreview: result.text,
+    };
+  }, { inputPreview: lastMsg });
 }
 
 /**
@@ -100,9 +160,9 @@ export async function textWithTools<T extends ToolSet>(opts: {
   maxSteps?: number;
   maxTokens?: number;
 }): Promise<GenerateTextResult<T, never>> {
-  return withFallback(opts.task, async (model) => {
+  return withFallback<GenerateTextResult<T, never>>(opts.task, async (model) => {
     const instance = createModelInstance(model);
-    return generateText({
+    const result = await generateText({
       model: instance,
       system: opts.system,
       messages: opts.messages,
@@ -110,6 +170,14 @@ export async function textWithTools<T extends ToolSet>(opts: {
       stopWhen: stepCountIs(opts.maxSteps ?? 10),
       maxOutputTokens: opts.maxTokens ?? 1024,
     });
+    return {
+      value: result as GenerateTextResult<T, never>,
+      usage: {
+        inputTokens: (result.usage as any)?.inputTokens ?? (result.usage as any)?.promptTokens,
+        outputTokens: (result.usage as any)?.outputTokens ?? (result.usage as any)?.completionTokens,
+      },
+      responsePreview: result.text ?? "(tool-use response)",
+    };
   });
 }
 
@@ -125,7 +193,7 @@ export async function vision(opts: {
   maxTokens?: number;
 }): Promise<string> {
   const task = opts.task ?? "vision_analysis";
-  return withFallback(task, async (model) => {
+  return withFallback<string>(task, async (model) => {
     const instance = createModelInstance(model);
     const result = await generateText({
       model: instance,
@@ -139,8 +207,15 @@ export async function vision(opts: {
       }] as any,
       maxOutputTokens: opts.maxTokens ?? 1024,
     });
-    return result.text;
-  });
+    return {
+      value: result.text,
+      usage: {
+        inputTokens: (result.usage as any)?.inputTokens,
+        outputTokens: (result.usage as any)?.outputTokens,
+      },
+      responsePreview: result.text,
+    };
+  }, { inputPreview: opts.prompt });
 }
 
 /**

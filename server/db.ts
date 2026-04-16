@@ -148,6 +148,33 @@ db.exec(`
     api_key TEXT NOT NULL,
     updated_at TEXT NOT NULL DEFAULT (datetime('now'))
   );
+
+  CREATE TABLE IF NOT EXISTS llm_calls (
+    id TEXT PRIMARY KEY,
+    task TEXT NOT NULL,
+    capability TEXT,
+    model_id TEXT NOT NULL,
+    provider_id TEXT NOT NULL,
+    input_tokens INTEGER,
+    output_tokens INTEGER,
+    cost_usd REAL,
+    latency_ms INTEGER,
+    status TEXT NOT NULL,
+    error TEXT,
+    request_preview TEXT,
+    response_preview TEXT,
+    created_at TEXT NOT NULL DEFAULT (datetime('now'))
+  );
+
+  CREATE INDEX IF NOT EXISTS idx_llm_calls_task ON llm_calls(task);
+  CREATE INDEX IF NOT EXISTS idx_llm_calls_model ON llm_calls(model_id);
+  CREATE INDEX IF NOT EXISTS idx_llm_calls_created ON llm_calls(created_at);
+
+  CREATE TABLE IF NOT EXISTS route_overrides (
+    task TEXT PRIMARY KEY,
+    model_id TEXT NOT NULL,
+    updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+  );
 `);
 
 // ─── Default user seed ────────────────────────────────────────────────────────

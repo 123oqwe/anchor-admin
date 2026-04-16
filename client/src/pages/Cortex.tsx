@@ -3,7 +3,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import {
   Cpu, CheckCircle2, XCircle, ChevronDown, ChevronRight,
   Loader2, Zap, Eye, Image, Video, Mic, Volume2,
-  Music, Box, Bot, Search, Trash2, Play, AlertCircle, X, type LucideIcon,
+  Music, Box, Bot, Search, Trash2, Play, AlertCircle, X, Lock, Unlock, type LucideIcon,
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { api } from "@/lib/api";
@@ -268,16 +268,30 @@ function ProviderRow({ provider, onChange }: { provider: any; onChange: () => vo
 
 export default function Cortex() {
   const [data, setData] = useState<any>(null);
+  const [overrides, setOverrides] = useState<Record<string, string>>({});
   const [loading, setLoading] = useState(true);
   const [filter, setFilter] = useState<"all" | "active" | "inactive">("all");
   const [selectedCapability, setSelectedCapability] = useState<string | null>(null);
+  const [editingOverride, setEditingOverride] = useState<string | null>(null);
   const refreshTimer = useRef<number | null>(null);
 
   const refresh = async () => {
     try {
-      const d = await api.getCortexStatus();
+      const [d, ov] = await Promise.all([api.getCortexStatus(), api.getOverrides()]);
       setData(d);
+      setOverrides(ov);
     } catch {}
+  };
+
+  const setOverride = async (task: string, modelId: string) => {
+    await api.setOverride(task, modelId);
+    setEditingOverride(null);
+    refresh();
+  };
+
+  const clearOverride = async (task: string) => {
+    await api.clearOverride(task);
+    refresh();
   };
 
   useEffect(() => {
@@ -285,7 +299,6 @@ export default function Cortex() {
       await refresh();
       setLoading(false);
     })();
-    // Auto-refresh every 10s to keep status live
     refreshTimer.current = window.setInterval(refresh, 10000);
     return () => { if (refreshTimer.current) clearInterval(refreshTimer.current); };
   }, []);
@@ -382,15 +395,20 @@ export default function Cortex() {
 
         {/* Task Routing */}
         <div>
-          <h2 className="text-sm font-semibold text-foreground mb-3">Task Routing</h2>
+          <h2 className="text-sm font-semibold text-foreground mb-3">Task Routing <span className="text-[10px] text-muted-foreground font-normal">· click model name to lock a specific one</span></h2>
           <div className="glass rounded-xl overflow-hidden">
-            <div className="grid grid-cols-[1fr_100px_100px_1fr] gap-0 text-[10px] font-medium text-muted-foreground uppercase tracking-wider px-4 py-2 border-b border-border/30">
+            <div className="grid grid-cols-[1fr_100px_80px_1.5fr] gap-0 text-[10px] font-medium text-muted-foreground uppercase tracking-wider px-4 py-2 border-b border-border/30">
               <span>Task</span><span>Capability</span><span>Tier</span><span>Routed To</span>
             </div>
             {capabilities.map((cap: any, i: number) => {
               const meta = CAPABILITY_META[cap.capability];
+              const overrideId = overrides[cap.task];
+              const overrideModel = overrideId ? cap.availableModels.find((m: any) => m.id === overrideId) : null;
+              const activeModel = overrideModel ?? cap.availableModels[0];
+              const isEditing = editingOverride === cap.task;
+
               return (
-                <div key={cap.task} className={`grid grid-cols-[1fr_100px_100px_1fr] gap-0 px-4 py-2.5 text-sm items-center ${i % 2 === 0 ? "" : "bg-white/[0.02]"}`}>
+                <div key={cap.task} className={`grid grid-cols-[1fr_100px_80px_1.5fr] gap-0 px-4 py-2.5 text-sm items-center ${i % 2 === 0 ? "" : "bg-white/[0.02]"}`}>
                   <span className="text-foreground text-xs">{TASK_LABELS[cap.task] ?? cap.task}</span>
                   <button onClick={() => setSelectedCapability(cap.capability)}
                     className={`text-[9px] w-fit px-2 py-0.5 rounded ${meta ? `${meta.color} bg-white/5 hover:bg-white/10` : "text-muted-foreground bg-white/5"} transition-colors`}>
@@ -398,14 +416,42 @@ export default function Cortex() {
                   </button>
                   <span className="text-[10px] text-muted-foreground font-mono">{cap.preferredTier}</span>
                   {cap.active ? (
-                    <div className="flex items-center gap-1.5">
-                      <div className="w-1.5 h-1.5 rounded-full bg-emerald-400" />
-                      <span className="text-xs text-foreground">{cap.availableModels[0]?.name}</span>
-                      <span className="text-[9px] text-muted-foreground">({cap.availableModels[0]?.provider})</span>
-                      {cap.availableModels.length > 1 && (
-                        <span className="text-[9px] text-muted-foreground/50">+{cap.availableModels.length - 1} fallback</span>
-                      )}
-                    </div>
+                    isEditing ? (
+                      <div className="flex items-center gap-1">
+                        <select autoFocus
+                          value={overrideId ?? ""}
+                          onChange={e => e.target.value ? setOverride(cap.task, e.target.value) : (clearOverride(cap.task), setEditingOverride(null))}
+                          className="bg-white/5 border border-amber-400/30 rounded px-2 py-0.5 text-[10px] text-foreground focus:outline-none flex-1 font-mono">
+                          <option value="">(auto)</option>
+                          {cap.availableModels.map((m: any) => (
+                            <option key={m.id} value={m.id}>{m.name} — {m.provider}</option>
+                          ))}
+                        </select>
+                        <button onClick={() => setEditingOverride(null)} className="text-muted-foreground hover:text-foreground">
+                          <X className="h-3 w-3" />
+                        </button>
+                      </div>
+                    ) : (
+                      <div className="flex items-center gap-1.5 group">
+                        <div className="w-1.5 h-1.5 rounded-full bg-emerald-400" />
+                        <button onClick={() => setEditingOverride(cap.task)}
+                          className="flex items-center gap-1.5 hover:bg-white/5 rounded px-1 py-0.5 transition-colors">
+                          {overrideModel
+                            ? <Lock className="h-2.5 w-2.5 text-amber-400" />
+                            : <Unlock className="h-2.5 w-2.5 text-muted-foreground/40 opacity-0 group-hover:opacity-100" />}
+                          <span className="text-xs text-foreground">{activeModel?.name}</span>
+                          <span className="text-[9px] text-muted-foreground">({activeModel?.provider})</span>
+                        </button>
+                        {!overrideModel && cap.availableModels.length > 1 && (
+                          <span className="text-[9px] text-muted-foreground/50">+{cap.availableModels.length - 1} fallback</span>
+                        )}
+                        {overrideModel && (
+                          <button onClick={() => clearOverride(cap.task)} className="text-[9px] text-muted-foreground hover:text-red-400 ml-1">
+                            unlock
+                          </button>
+                        )}
+                      </div>
+                    )
                   ) : (
                     <div className="flex items-center gap-1.5">
                       <div className="w-1.5 h-1.5 rounded-full bg-red-400/50" />

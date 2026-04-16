@@ -75,4 +75,11 @@ export const api = {
   deleteProviderKey: (id: string) => req("DELETE", `/api/admin/providers/${id}/key`),
   testProvider: (id: string) => req<any>("POST", `/api/admin/providers/${id}/test`, {}),
   getCapabilityRoster: (cap: string) => req<any>("GET", `/api/admin/capability/${cap}`),
+  getCosts: (days = 7) => req<any>("GET", `/api/admin/costs?days=${days}`),
+  getPerformance: (days = 7) => req<any[]>("GET", `/api/admin/performance?days=${days}`),
+  getCalls: (limit = 100) => req<any[]>("GET", `/api/admin/calls?limit=${limit}`),
+  getCallDetail: (id: string) => req<any>("GET", `/api/admin/calls/${id}`),
+  getOverrides: () => req<Record<string, string>>("GET", "/api/admin/overrides"),
+  setOverride: (task: string, modelId: string) => req("PUT", `/api/admin/overrides/${task}`, { modelId }),
+  clearOverride: (task: string) => req("DELETE", `/api/admin/overrides/${task}`),
 };
