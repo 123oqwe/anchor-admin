@@ -2,9 +2,11 @@ import { schedule } from "node-cron";
 import { db, DEFAULT_USER_ID } from "../infra/storage/db.js";
 import { nanoid } from "nanoid";
 import { text } from "../infra/compute/index.js";
-import { invalidateSnapshot } from "../memory/retrieval.js";
+import { invalidateSnapshot, writeMemory } from "../memory/retrieval.js";
 import { runDream } from "../memory/dream.js";
 import { detectDrift } from "../cognition/twin.js";
+import { checkProactiveTriggers } from "./enforcement.js";
+import { markStaleAsDecaying } from "../graph/writer.js";
 
 function log(agent: string, action: string, status = "success") {
   db.prepare("INSERT INTO agent_executions (id, user_id, agent, action, status) VALUES (?,?,?,?,?)")
@@ -44,11 +46,8 @@ schedule("0 8 * * *", async () => {
 // ── Every 6 hours — Decay Checker ───────────────────────────────────────────
 schedule("0 */6 * * *", () => {
   try {
-    const result = db.prepare(`
-      UPDATE graph_nodes SET status='decaying', updated_at=datetime('now')
-      WHERE user_id=? AND status IN ('active','opportunity') AND julianday('now') - julianday(updated_at) > 5
-    `).run(DEFAULT_USER_ID);
-    if (result.changes > 0) log("Observation Agent", `Decay check: ${result.changes} nodes marked decaying`);
+    const changed = markStaleAsDecaying(5); // 5 days
+    if (changed > 0) log("Observation Agent", `Decay check: ${changed} nodes marked decaying`);
   } catch (err: any) {
     console.error("[Cron] Decay Checker failed:", err.message);
   }
@@ -114,6 +113,28 @@ schedule("0 3 * * *", async () => {
   }
 });
 
+// ── Every 12 hours — Proactive Suggestion Check ─────────────────────────────
+schedule("0 */12 * * *", () => {
+  try {
+    const trigger = checkProactiveTriggers();
+    if (trigger) {
+      // Write proactive suggestion as working memory (will appear in next Decision context)
+      writeMemory({
+        type: "working",
+        title: `Proactive: ${trigger.reason}`,
+        content: `System detected: ${trigger.reason}. Consider addressing this proactively.`,
+        tags: ["proactive", "system-triggered"],
+        source: "Orchestrator",
+        confidence: 0.85,
+      });
+      log("Orchestrator", `Proactive trigger: ${trigger.reason}`);
+      console.log(`[Cron] Proactive: ${trigger.reason}`);
+    }
+  } catch (err: any) {
+    console.error("[Cron] Proactive check failed:", err.message);
+  }
+});
+
 export function startCronJobs() {
-  console.log("⏰ Cron jobs scheduled: Morning Digest(8am) | Decay(6h) | Twin(Mon 9am) | Stale Tasks(10pm) | Memory Maintenance(3am)");
+  console.log("⏰ Cron: Digest(8am) | Decay(6h) | Twin(Mon 9am) | Tasks(10pm) | Dream(3am) | Proactive(12h)");
 }
