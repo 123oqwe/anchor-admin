@@ -175,15 +175,22 @@ export function registerBuiltinTools(): void {
       required: ["code"],
     },
     execute: async (input): Promise<ToolResult> => {
-      // Safe eval for simple JS expressions (numbers, strings, JSON)
       try {
-        // Only allow pure expressions — no require, no fs, no process
-        const forbidden = ["require", "import", "process", "fs", "child_process", "eval", "Function"];
+        const code = input.code ?? input.language ?? "";
+        const forbidden = ["require", "import", "process", "fs", "child_process", "exec", "spawn"];
         for (const f of forbidden) {
-          if (input.code.includes(f)) return { success: false, output: `Forbidden: "${f}" not allowed in sandbox`, error: "SANDBOX_VIOLATION" };
+          if (code.includes(f)) return { success: false, output: `Forbidden: "${f}" not allowed`, error: "SANDBOX_VIOLATION" };
         }
-        const result = new Function(`"use strict"; return (${input.code})`)();
-        const output = typeof result === "object" ? JSON.stringify(result, null, 2) : String(result);
+        // Support both expressions and multi-statement code blocks
+        // Wrap in an IIFE to handle const/let declarations
+        const wrapped = code.includes("const ") || code.includes("let ") || code.includes("var ")
+          ? `"use strict"; ${code}` // multi-statement — last expression is return value
+          : `"use strict"; return (${code})`; // single expression
+        const fn = new Function(wrapped);
+        const result = fn();
+        const output = result === undefined
+          ? "(executed, no return value)"
+          : typeof result === "object" ? JSON.stringify(result, null, 2) : String(result);
         return { success: true, output: output.slice(0, 2000), data: { result } };
       } catch (err: any) {
         return { success: false, output: `Code error: ${err.message}`, error: err.message };

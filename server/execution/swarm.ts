@@ -117,10 +117,10 @@ Group independent steps into the same phase for parallel execution.`,
 function suggestTool(content: string): string {
   const lower = content.toLowerCase();
   if (lower.includes("search") || lower.includes("research") || lower.includes("look up")) return "web_search";
-  if (lower.includes("email") || lower.includes("send") || lower.includes("message")) return "send_email";
-  if (lower.includes("read") || lower.includes("fetch") || lower.includes("url") || lower.includes("check website")) return "read_url";
+  if ((lower.includes("email") || lower.includes("send")) && (lower.includes("@") || lower.includes("to "))) return "send_email";
+  if (lower.includes("http://") || lower.includes("https://") || lower.includes("check website") || lower.includes("fetch url")) return "read_url";
   if (lower.includes("calendar") || lower.includes("schedule") || lower.includes("meeting")) return "create_calendar_event";
-  if (lower.includes("calculate") || lower.includes("compute") || lower.includes("code")) return "run_code";
+  if (lower.includes("```") || lower.includes("function(") || lower.includes("const ") || lower.includes("let ")) return "run_code";
   if (lower.includes("update") && (lower.includes("status") || lower.includes("graph") || lower.includes("node"))) return "update_graph_node";
   return "write_task"; // default: create a task for it
 }
@@ -162,17 +162,20 @@ export async function runExecutionSwarm(plan: ExecutionPlan): Promise<SwarmResul
         totalSteps: plan.phases.reduce((s, p) => s + p.steps.length, 0),
       };
 
+      // Construct proper tool input using LLM
+      const toolInput = await constructToolInput(assignment.suggestedTool, assignment.step.content, context);
+
       const start = Date.now();
-      const result = await executeTool(assignment.suggestedTool, {
-        title: assignment.step.content,
-        summary: assignment.step.content,
-        // Pass additional input based on tool type
-        ...(assignment.suggestedTool === "update_graph_node" ? { label: assignment.step.content.split(" ").slice(0, 3).join(" "), new_status: "in-progress" } : {}),
-        ...(assignment.suggestedTool === "read_url" ? { url: extractUrl(assignment.step.content) } : {}),
-        ...(assignment.suggestedTool === "web_search" ? { query: assignment.step.content } : {}),
-        ...(assignment.suggestedTool === "run_code" ? { code: assignment.step.content, language: "javascript" } : {}),
-      }, context, "user_triggered");
-      const latency = Date.now() - start;
+      let result = await executeTool(assignment.suggestedTool, toolInput, context, "user_triggered");
+      let latency = Date.now() - start;
+
+      // Retry once if retryable
+      if (!result.success && result.shouldRetry) {
+        console.log(`[Execution Swarm] Retrying ${assignment.suggestedTool}...`);
+        const retryStart = Date.now();
+        result = await executeTool(assignment.suggestedTool, toolInput, context, "user_triggered");
+        latency += Date.now() - retryStart;
+      }
 
       return {
         step: assignment.step.content,
@@ -209,6 +212,51 @@ export async function runExecutionSwarm(plan: ExecutionPlan): Promise<SwarmResul
 function extractUrl(content: string): string {
   const match = content.match(/https?:\/\/[^\s]+/);
   return match ? match[0] : content;
+}
+
+// ── LLM-constructed tool input ──────────────────────────────────────────────
+
+async function constructToolInput(toolName: string, stepContent: string, context: ExecutionContext): Promise<any> {
+  const tool = getAllTools().find(t => t.name === toolName);
+  if (!tool) return { title: stepContent, summary: stepContent };
+
+  // For simple tools, construct input deterministically
+  if (toolName === "write_task") return { title: stepContent, priority: "high" };
+  if (toolName === "record_outcome") return { summary: stepContent };
+  if (toolName === "read_url") return { url: extractUrl(stepContent) };
+  if (toolName === "web_search") return { query: stepContent };
+
+  // For complex tools, use LLM to construct proper parameters
+  try {
+    const prevContext = context.previousResults.length > 0
+      ? `\nPrevious results:\n${context.previousResults.map(r => `${r.toolName}: ${r.output.slice(0, 100)}`).join("\n")}`
+      : "";
+
+    const result = await text({
+      task: "twin_edit_learning",
+      system: `You construct tool input parameters. Given a step description and a tool's input schema, produce the correct JSON input.
+
+Tool: ${tool.name}
+Description: ${tool.description}
+Input schema: ${JSON.stringify(tool.inputSchema)}
+${prevContext}
+
+Respond ONLY with a JSON object matching the schema. No markdown, no explanation.`,
+      messages: [{ role: "user", content: `Step: ${stepContent}` }],
+      maxTokens: 200,
+    });
+
+    const stripped = result.replace(/```json\s*/g, "").replace(/```/g, "");
+    const parsed = JSON.parse(stripped.match(/\{[\s\S]*\}/)?.[0] ?? "{}");
+    return parsed;
+  } catch {
+    // Fallback: pass step content as all required fields
+    const fallback: any = {};
+    for (const key of tool.inputSchema.required ?? []) {
+      fallback[key] = stepContent;
+    }
+    return fallback;
+  }
 }
 
 // ── Should use swarm? ───────────────────────────────────────────────────────
