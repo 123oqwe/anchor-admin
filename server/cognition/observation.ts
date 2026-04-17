@@ -16,9 +16,11 @@ function log(agent: string, action: string, status = "success") {
 }
 
 export function persistInsightAsSemanticMemory(insight: string) {
+  // Use first phrase of insight as title to avoid duplicate generic titles
+  const shortTitle = `Twin: ${insight.split(/[.!,;]/)[0].trim()}`.slice(0, 60);
   writeMemory({
     type: "semantic",
-    title: "Behavioral Pattern Detected",
+    title: shortTitle,
     content: insight,
     tags: ["twin", "auto-generated"],
     source: "Twin Agent",

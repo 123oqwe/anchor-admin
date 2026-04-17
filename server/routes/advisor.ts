@@ -141,15 +141,8 @@ router.post("/confirm", async (req: Request, res: Response) => {
   const firstStep = user_steps[0]?.content?.slice(0, 30) ?? "Plan";
   createNode({ domain: "work", label: `Decision: ${firstStep}`, type: "decision", status: "active", captured: "Plan confirmed by user", detail: user_steps.map((s: any) => s.content).join("; ").slice(0, 200) });
 
-  // L2 Memory: record plan confirmation as episodic memory
-  writeMemory({
-    type: "episodic",
-    title: `Plan confirmed: ${firstStep}`,
-    content: `${user_steps.length} steps confirmed. Changes: ${changes.filter(c => c.type !== "kept").length} modifications. Steps: ${user_steps.map((s: any) => s.content).join("; ").slice(0, 150)}`,
-    tags: ["decision", "plan", "confirmed"],
-    source: "Decision Agent",
-    confidence: 0.9,
-  });
+  // Note: plan decision memory is recorded by Twin's trackPlanDecision() in handlers.ts
+  // No duplicate writeMemory here.
 
   bus.publish({ type: "USER_CONFIRMED", payload: { original_steps, user_steps, changes } });
   res.json({ ok: true, changes });

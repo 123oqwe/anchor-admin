@@ -25,11 +25,13 @@ export function shouldActivateSwarm(context: {
   constraintCount: number;
   isMultiDomain: boolean;
 }): boolean {
-  if (context.stepCount <= 2 && context.decisionConfidence > 0.8) return false;
-  if (context.stepCount > 3 && context.decisionConfidence < 0.7) return true;
-  if (context.constraintCount >= 3) return true;
-  if (context.isMultiDomain) return true;
-  return false;
+  // Only activate for genuinely complex decisions — be conservative
+  // Must have LOW confidence AND high complexity (not just one)
+  if (context.decisionConfidence > 0.7) return false;         // confident enough
+  if (context.stepCount <= 4) return false;                    // not enough steps to warrant debate
+  if (context.constraintCount < 3 && !context.isMultiDomain) return false; // not complex enough
+  // All conditions met: low confidence + many steps + many constraints or multi-domain
+  return true;
 }
 
 // ── Debate execution ────────────────────────────────────────────────────────
