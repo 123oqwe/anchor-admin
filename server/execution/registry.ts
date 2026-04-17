@@ -8,7 +8,7 @@
  * - Dynamic registration (add tools at runtime)
  * - Per-tool execution logging
  */
-import { checkPermission } from "../permission/gate.js";
+import { checkPermission, recordSuccess, recordFailure } from "../permission/gate.js";
 import { type ActionClass } from "../permission/levels.js";
 import { db, DEFAULT_USER_ID } from "../infra/storage/db.js";
 import { nanoid } from "nanoid";
@@ -112,6 +112,9 @@ export async function executeTool(
     const result = await tool.execute(input, context);
     const latency = Date.now() - start;
     logToolCall(name, input, result, latency);
+    // L6 trust progression: record success/failure
+    if (result.success) recordSuccess(tool.actionClass);
+    else recordFailure(tool.actionClass);
     return result;
   } catch (err: any) {
     const latency = Date.now() - start;
@@ -122,6 +125,7 @@ export async function executeTool(
       shouldRetry: true,
     };
     logToolCall(name, input, result, latency);
+    recordFailure(tool.actionClass);
     return result;
   }
 }

@@ -1,6 +1,7 @@
 import { Router } from "express";
 import { setApiKey, deleteApiKey, getApiKey } from "../infra/compute/keys.js";
 import { getRegistryInfo } from "../execution/registry.js";
+import { getPermissionStatus } from "../permission/gate.js";
 import { PROVIDERS, MODELS } from "../infra/compute/providers.js";
 import { getCapabilityRoster } from "../infra/compute/index.js";
 import {
@@ -161,6 +162,12 @@ router.delete("/overrides/:task", (req, res) => {
 
 router.get("/tools", (_req, res) => {
   res.json(getRegistryInfo());
+});
+
+// ── Permission status ───────────────────────────────────────────────────────
+
+router.get("/permissions", (_req, res) => {
+  res.json(getPermissionStatus());
 });
 
 export default router;
