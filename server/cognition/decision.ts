@@ -12,7 +12,7 @@
  * Pure cognition — no side effects.
  */
 import { text } from "../infra/compute/index.js";
-import { serializeForPrompt as graphPrompt, serializeStateForPrompt, serializeEdgesForPrompt } from "../graph/reader.js";
+import { serializeForPrompt as graphPrompt, serializeStateForPrompt, serializeEdgesForPrompt, getNodesByType } from "../graph/reader.js";
 import { serializeForPrompt as memoryPrompt, serializeTwinForPrompt } from "../memory/retrieval.js";
 import { type DecisionPacket, type ContextPacket, type StageTrace } from "./packets.js";
 
@@ -33,6 +33,34 @@ export interface DecisionResult {
   };
 }
 
+/** Build user's value constitution from L1 graph value/constraint/preference nodes. */
+function buildValueConstitution(): string {
+  const values = getNodesByType("value" as any);
+  const constraints = getNodesByType("constraint" as any);
+  const preferences = getNodesByType("preference" as any);
+
+  if (values.length === 0 && constraints.length === 0 && preferences.length === 0) {
+    return "";
+  }
+
+  const lines: string[] = ["USER VALUE CONSTITUTION (respect these in ALL recommendations):"];
+  if (values.length > 0) {
+    lines.push("VALUES (what the user cares about deeply — never contradict):");
+    for (const v of values) lines.push(`  - ${v.label}: ${v.detail}`);
+  }
+  if (constraints.length > 0) {
+    lines.push("CONSTRAINTS (hard limits — never violate):");
+    for (const c of constraints) lines.push(`  - ${c.label} (${c.status}): ${c.detail}`);
+  }
+  if (preferences.length > 0) {
+    lines.push("PREFERENCES (how the user likes things done — follow unless user explicitly overrides):");
+    for (const p of preferences) lines.push(`  - ${p.label}: ${p.detail}`);
+  }
+  lines.push("");
+  lines.push("HIERARCHY: Safety > User values > Constraints > Preferences > Efficiency");
+  return lines.join("\n");
+}
+
 const DECISION_SYSTEM_PROMPT = `You are Anchor's Decision Agent. You reason through a strict 5-stage pipeline.
 
 {STATE}
@@ -47,6 +75,8 @@ BEHAVIORAL MEMORY:
 
 TWIN INSIGHTS (user behavioral priors — these are inferred, not facts):
 {TWIN}
+
+{CONSTITUTION}
 
 YOUR 5-STAGE REASONING PROCESS:
 Stage 1 — CONSTRAINT EXTRACTION: Identify all blockers, deadlines, conflicts, and hard constraints from the graph.
@@ -88,7 +118,8 @@ function buildSystemPrompt(userMessage: string): string {
     .replace("{GRAPH}", graphPrompt())
     .replace("{EDGES}", serializeEdgesForPrompt())
     .replace("{MEMORY}", memoryPrompt(userMessage))
-    .replace("{TWIN}", serializeTwinForPrompt());
+    .replace("{TWIN}", serializeTwinForPrompt())
+    .replace("{CONSTITUTION}", buildValueConstitution());
 }
 
 /** Run the Decision Agent 5-stage pipeline. */
@@ -157,7 +188,62 @@ export async function decide(
     }
   } catch {}
 
+  // Trajectory confidence verification: independent cheap-model check
+  if (packet && packet.confidenceScore > 0) {
+    await verifyTrajectoryConfidence(packet, message);
+  }
+
   return { raw, isPlan: !!structured, packet, structured };
+}
+
+// ── Trajectory Confidence Verifier (ACC pattern, 2026) ──────────────────────
+
+async function verifyTrajectoryConfidence(packet: DecisionPacket, userMessage: string): Promise<void> {
+  try {
+    const verifierResult = await text({
+      task: "twin_edit_learning",  // cheap model
+      system: `You are an independent confidence calibrator. Evaluate whether this decision plan is well-reasoned.
+
+User asked: "${userMessage.slice(0, 200)}"
+
+Plan summary: ${packet.suggestionSummary}
+Why now: ${packet.whyThisNow}
+Risk level: ${packet.riskLevel}
+Steps: ${packet.candidates.length}
+Conflict flags: ${packet.conflictFlags.join("; ") || "none"}
+Original confidence: ${packet.confidenceScore}
+
+Evaluate:
+1. Is the reasoning sound given the information?
+2. Are there blind spots the plan missed?
+3. Is the confidence level appropriate?
+
+Respond ONLY with JSON: {"verified_confidence": 0.0-1.0, "blind_spots": ["any missed issues"], "calibration_note": "brief note"}`,
+      messages: [{ role: "user", content: "Verify this decision trajectory." }],
+      maxTokens: 200,
+    });
+
+    const stripped = verifierResult.replace(/```json\s*/g, "").replace(/```/g, "");
+    const parsed = JSON.parse(stripped.match(/\{[\s\S]*\}/)?.[0] ?? "{}");
+
+    if (parsed.verified_confidence !== undefined) {
+      const gap = Math.abs(packet.confidenceScore - parsed.verified_confidence);
+      if (gap > 0.3) {
+        packet.conflictFlags.push(`LOW_CALIBRATION: Decision confidence ${packet.confidenceScore.toFixed(2)} but verifier says ${parsed.verified_confidence.toFixed(2)} (gap: ${gap.toFixed(2)})`);
+        // Adjust to average
+        packet.confidenceScore = (packet.confidenceScore + parsed.verified_confidence) / 2;
+        console.log(`[Decision Agent] Confidence recalibrated: ${packet.confidenceScore.toFixed(2)} (verifier gap: ${gap.toFixed(2)})`);
+      }
+      if (parsed.blind_spots?.length > 0) {
+        for (const bs of parsed.blind_spots) {
+          if (bs && bs.length > 5) packet.conflictFlags.push(`BLIND_SPOT: ${bs}`);
+        }
+      }
+    }
+  } catch (err: any) {
+    // Verifier failure is non-fatal — just log
+    console.log(`[Decision Agent] Verifier skipped: ${err.message?.slice(0, 50)}`);
+  }
 }
 
 // ── Cognitive Failure Detection (8 modes from spec) ─────────────────────────
