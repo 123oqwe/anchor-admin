@@ -16,6 +16,7 @@ import { bus, type EditableStep } from "../orchestration/bus.js";
 import { routeTask } from "../infra/compute/router.js";
 import { getApiKey } from "../infra/compute/keys.js";
 import { getAllTools, executeTool, getToolsForLLM, type ToolResult, type ExecutionContext } from "./registry.js";
+import { shouldUseSwarm, planExecution, runExecutionSwarm } from "./swarm.js";
 
 function log(agent: string, action: string, status = "success") {
   db.prepare("INSERT INTO agent_executions (id, user_id, agent, action, status) VALUES (?,?,?,?,?)")
@@ -35,6 +36,30 @@ interface Checkpoint {
 // ── Main ReAct execution ────────────────────────────────────────────────────
 
 export async function runExecutionReAct(steps: EditableStep[]) {
+  // Route: 3+ steps → Execution Swarm (parallel phases), 1-2 steps → sequential ReAct
+  if (shouldUseSwarm(steps)) {
+    console.log(`[Execution Agent] ${steps.length} steps → routing to Execution Swarm`);
+    log("Execution Agent", `Swarm mode: ${steps.length} steps`);
+    try {
+      const plan = await planExecution(steps);
+      const swarmResult = await runExecutionSwarm(plan);
+
+      // Convert swarm results to standard format for EXECUTION_DONE event
+      const stepsResult = swarmResult.phases.flatMap(p =>
+        p.results.map(r => ({ step: r.tool, status: r.success ? "done" : "error", result: r.output }))
+      );
+
+      bus.publish({
+        type: "EXECUTION_DONE",
+        payload: { steps_result: stepsResult, plan_summary: steps.map(s => s.content).join("; ") },
+      });
+      return;
+    } catch (err: any) {
+      console.error("[Execution Swarm] Failed, falling back to ReAct:", err.message);
+      // Fall through to sequential ReAct
+    }
+  }
+
   console.log(`[Execution Agent] ReAct starting with ${steps.length} steps...`);
   log("Execution Agent", `ReAct: ${steps.length} steps`);
 
