@@ -7,6 +7,9 @@ import cookieParser from "cookie-parser";
 // Import DB (runs seed on startup)
 import "./infra/storage/db.js";
 
+// L5 Execution: register tools
+import { registerBuiltinTools } from "./execution/tools.js";
+
 // Event bus handlers and cron jobs
 import { startEventHandlers } from "./orchestration/handlers.js";
 import { startCronJobs } from "./orchestration/cron.js";
@@ -53,6 +56,7 @@ async function startServer() {
   });
 
   // ── Start agent harness ───────────────────────────────────────────────────
+  registerBuiltinTools();
   startEventHandlers();
   startCronJobs();
 

@@ -1,5 +1,6 @@
 import { Router } from "express";
 import { setApiKey, deleteApiKey, getApiKey } from "../infra/compute/keys.js";
+import { getRegistryInfo } from "../execution/registry.js";
 import { PROVIDERS, MODELS } from "../infra/compute/providers.js";
 import { getCapabilityRoster } from "../infra/compute/index.js";
 import {
@@ -154,6 +155,12 @@ router.put("/overrides/:task", (req, res) => {
 router.delete("/overrides/:task", (req, res) => {
   clearRouteOverride(req.params.task);
   res.json({ ok: true });
+});
+
+// ── Tool registry ───────────────────────────────────────────────────────────
+
+router.get("/tools", (_req, res) => {
+  res.json(getRegistryInfo());
 });
 
 export default router;
