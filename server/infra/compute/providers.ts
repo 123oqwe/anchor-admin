@@ -150,12 +150,13 @@ export function estimateCost(modelId: string, inputTokens: number, outputTokens:
 }
 
 export const MODELS: Model[] = [
-  // ── Anthropic ────────────────────────────────────────────────────────────
+  // ── Anthropic (April 2026) ─────────────────────────────────────────────
   { id: "claude-opus-4-6",             provider: "anthropic", name: "Claude Opus 4.6",          capabilities: ["text", "reasoning", "vision"], tier: "frontier" },
   { id: "claude-sonnet-4-6",           provider: "anthropic", name: "Claude Sonnet 4.6",        capabilities: ["text", "reasoning", "vision"], tier: "strong" },
   { id: "claude-haiku-4-5-20251001",   provider: "anthropic", name: "Claude Haiku 4.5",         capabilities: ["text", "vision"],              tier: "fast" },
 
-  // ── OpenAI ───────────────────────────────────────────────────────────────
+  // ── OpenAI (April 2026) ────────────────────────────────────────────────
+  { id: "gpt-5.4",                     provider: "openai",   name: "GPT-5.4",                   capabilities: ["text", "reasoning", "vision"], tier: "frontier" },
   { id: "gpt-4o",                      provider: "openai",   name: "GPT-4o",                    capabilities: ["text", "reasoning", "vision"], tier: "strong" },
   { id: "gpt-4o-mini",                 provider: "openai",   name: "GPT-4o Mini",               capabilities: ["text", "vision"],              tier: "fast" },
   { id: "gpt-4.1",                     provider: "openai",   name: "GPT-4.1",                   capabilities: ["text", "reasoning", "vision"], tier: "strong" },

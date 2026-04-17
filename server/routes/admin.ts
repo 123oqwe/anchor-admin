@@ -1,6 +1,9 @@
 import { Router } from "express";
 import { setApiKey, deleteApiKey, getApiKey } from "../infra/compute/keys.js";
 import { getRegistryInfo } from "../execution/registry.js";
+import { getHandStatus } from "../infra/hand/index.js";
+import { getMCPStatus } from "../infra/mcp/index.js";
+import { getRAGStatus } from "../infra/rag/index.js";
 import { getPermissionStatus, activateLockdown, deactivateLockdown, isLocked, setTrustLevel } from "../permission/gate.js";
 import { type PermissionLevel, type ActionClass } from "../permission/levels.js";
 import { PROVIDERS, MODELS } from "../infra/compute/providers.js";
@@ -185,6 +188,16 @@ router.put("/permissions/trust/:actionClass", (req, res) => {
   const { level } = req.body;
   setTrustLevel(req.params.actionClass as ActionClass, level as PermissionLevel);
   res.json({ ok: true });
+});
+
+// ── Infrastructure status ────────────────────────────────────────────────────
+
+router.get("/infra", (_req, res) => {
+  res.json({
+    hand: getHandStatus(),
+    mcp: getMCPStatus(),
+    rag: getRAGStatus(),
+  });
 });
 
 export default router;

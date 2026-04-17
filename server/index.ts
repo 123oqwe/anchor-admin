@@ -9,6 +9,9 @@ import "./infra/storage/db.js";
 
 // L5 Execution: register tools
 import { registerBuiltinTools } from "./execution/tools.js";
+// L8 Infrastructure: Hand + MCP
+import { initHand } from "./infra/hand/index.js";
+import { initMCP } from "./infra/mcp/index.js";
 
 // Event bus handlers and cron jobs
 import { startEventHandlers } from "./orchestration/handlers.js";
@@ -57,6 +60,8 @@ async function startServer() {
 
   // ── Start agent harness ───────────────────────────────────────────────────
   registerBuiltinTools();
+  await initHand();         // L8: Browser + Computer Use tools
+  initMCP();                // L8: MCP server
   startEventHandlers();
   startCronJobs();
 
