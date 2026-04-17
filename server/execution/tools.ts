@@ -163,7 +163,7 @@ export function registerBuiltinTools(): void {
 
   registerTool({
     name: "run_code",
-    description: "Execute a code snippet in a sandboxed environment. Supports JavaScript.",
+    description: "Execute a JavaScript code snippet. The code must RETURN a value (not console.log). Example: '15000 * 6' returns 90000.",
     handler: "code",
     actionClass: "write_memory",  // code execution is a side effect
     inputSchema: {
@@ -176,15 +176,19 @@ export function registerBuiltinTools(): void {
     },
     execute: async (input): Promise<ToolResult> => {
       try {
-        const code = input.code ?? input.language ?? "";
+        let code = (input.code ?? "").trim();
         const forbidden = ["require", "import", "process", "fs", "child_process", "exec", "spawn"];
         for (const f of forbidden) {
           if (code.includes(f)) return { success: false, output: `Forbidden: "${f}" not allowed`, error: "SANDBOX_VIOLATION" };
         }
+        // Strip console.log wrapper if present
+        code = code.replace(/^console\.log\((.+)\);?$/, "$1");
+        // Strip leading "return " if present (sandbox adds it)
+        code = code.replace(/^return\s+/, "");
         // Support both expressions and multi-statement code blocks
-        // Wrap in an IIFE to handle const/let declarations
-        const wrapped = code.includes("const ") || code.includes("let ") || code.includes("var ")
-          ? `"use strict"; ${code}` // multi-statement — last expression is return value
+        const isMultiStatement = code.includes("const ") || code.includes("let ") || code.includes("var ") || code.includes(";");
+        const wrapped = isMultiStatement
+          ? `"use strict"; ${code}` // multi-statement
           : `"use strict"; return (${code})`; // single expression
         const fn = new Function(wrapped);
         const result = fn();

@@ -220,13 +220,18 @@ async function constructToolInput(toolName: string, stepContent: string, context
   const tool = getAllTools().find(t => t.name === toolName);
   if (!tool) return { title: stepContent, summary: stepContent };
 
-  // For simple tools, construct input deterministically
-  if (toolName === "write_task") return { title: stepContent, priority: "high" };
-  if (toolName === "record_outcome") return { summary: stepContent };
-  if (toolName === "read_url") return { url: extractUrl(stepContent) };
-  if (toolName === "web_search") return { query: stepContent };
+  // If there are previous results AND step references them, always use LLM
+  const hasPrevContext = context.previousResults.length > 0 && context.stepIndex > 0;
 
-  // For complex tools, use LLM to construct proper parameters
+  // Simple tools with no previous context — deterministic
+  if (!hasPrevContext) {
+    if (toolName === "write_task") return { title: stepContent, priority: "high" };
+    if (toolName === "record_outcome") return { summary: stepContent };
+    if (toolName === "read_url") return { url: extractUrl(stepContent) };
+    if (toolName === "web_search") return { query: stepContent };
+  }
+
+  // All tools with previous context, or complex tools — use LLM
   try {
     const prevContext = context.previousResults.length > 0
       ? `\nPrevious results:\n${context.previousResults.map(r => `${r.toolName}: ${r.output.slice(0, 100)}`).join("\n")}`
@@ -234,14 +239,20 @@ async function constructToolInput(toolName: string, stepContent: string, context
 
     const result = await text({
       task: "twin_edit_learning",
-      system: `You construct tool input parameters. Given a step description and a tool's input schema, produce the correct JSON input.
+      system: `You construct tool input parameters. Given a step description, a tool schema, and previous results, produce the correct JSON input.
 
 Tool: ${tool.name}
 Description: ${tool.description}
 Input schema: ${JSON.stringify(tool.inputSchema)}
 ${prevContext}
 
-Respond ONLY with a JSON object matching the schema. No markdown, no explanation.`,
+RULES:
+- For run_code: write a RETURN expression (e.g. "15000 * 6"), NOT console.log
+- For write_task: if previous results contain useful info, incorporate it into the title
+- For record_outcome: summarize ALL previous results into a meaningful summary
+- Use information from previous results when relevant
+
+Respond ONLY with a JSON object matching the schema. No markdown.`,
       messages: [{ role: "user", content: `Step: ${stepContent}` }],
       maxTokens: 200,
     });
