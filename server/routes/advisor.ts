@@ -10,8 +10,28 @@ import { text } from "../infra/compute/index.js";
 import { decide } from "../cognition/decision.js";
 import { extractFromMessage } from "../cognition/extractor.js";
 import { createNode } from "../graph/writer.js";
+import { writeMemory } from "../memory/retrieval.js";
 
 const router = Router();
+
+/** Extract topic tags from a user message for memory tagging. */
+function extractConversationTags(message: string): string[] {
+  const tagWords: Record<string, string[]> = {
+    investor: ["investor", "fundrais", "sequoia", "a16z", "vc", "series", "round", "pitch"],
+    product: ["product", "roadmap", "feature", "ship", "launch", "mvp", "build"],
+    team: ["co-founder", "cofounder", "cto", "hire", "team", "standup", "alignment"],
+    finance: ["runway", "burn", "revenue", "cost", "budget", "spending", "money"],
+    health: ["sleep", "energy", "stress", "exercise", "tired", "burnout"],
+    decision: ["decide", "decision", "choice", "should i", "prioritize", "focus"],
+    relationship: ["meet", "met", "call", "email", "intro", "follow up", "connect"],
+  };
+  const lower = message.toLowerCase();
+  const tags: string[] = [];
+  for (const [tag, keywords] of Object.entries(tagWords)) {
+    if (keywords.some(kw => lower.includes(kw))) tags.push(tag);
+  }
+  return tags.length > 0 ? tags : ["general"];
+}
 
 function logExecution(agent: string, action: string, status = "success") {
   db.prepare("INSERT INTO agent_executions (id, user_id, agent, action, status) VALUES (?,?,?,?,?)")
@@ -51,6 +71,16 @@ router.post("/personal", async (req: Request, res: Response) => {
     insertMsg.run(msgId, DEFAULT_USER_ID, "personal", result.isPlan ? "draft" : "advisor", result.raw, result.isPlan ? "plan" : null, result.isPlan ? "pending" : null, null);
 
     logExecution("Decision Agent", `${result.isPlan ? "Plan" : "Advice"}: ${message.substring(0, 60)}`);
+
+    // L2 Memory: record this conversation as episodic memory
+    writeMemory({
+      type: "episodic",
+      title: `Conversation: ${message.slice(0, 50)}`,
+      content: `User: ${message.slice(0, 150)} | Anchor: ${result.raw.slice(0, 150)}`,
+      tags: extractConversationTags(message),
+      source: "Decision Agent",
+      confidence: 0.8,
+    });
 
     // L1 Graph growth: debounced extract nodes/edges from user message (non-blocking)
     extractFromMessage(message);
@@ -93,6 +123,16 @@ router.post("/confirm", async (req: Request, res: Response) => {
   // L1 writeback: record the decision in the graph (short label, steps in detail)
   const firstStep = user_steps[0]?.content?.slice(0, 30) ?? "Plan";
   createNode({ domain: "work", label: `Decision: ${firstStep}`, type: "decision", status: "active", captured: "Plan confirmed by user", detail: user_steps.map((s: any) => s.content).join("; ").slice(0, 200) });
+
+  // L2 Memory: record plan confirmation as episodic memory
+  writeMemory({
+    type: "episodic",
+    title: `Plan confirmed: ${firstStep}`,
+    content: `${user_steps.length} steps confirmed. Changes: ${changes.filter(c => c.type !== "kept").length} modifications. Steps: ${user_steps.map((s: any) => s.content).join("; ").slice(0, 150)}`,
+    tags: ["decision", "plan", "confirmed"],
+    source: "Decision Agent",
+    confidence: 0.9,
+  });
 
   bus.publish({ type: "USER_CONFIRMED", payload: { original_steps, user_steps, changes } });
   res.json({ ok: true, changes });
