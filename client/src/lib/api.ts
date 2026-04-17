@@ -66,6 +66,9 @@ export const api = {
   confirmPlan: (original_steps: any[], user_steps: any[]) => req<any>("POST", "/api/advisor/confirm", { original_steps, user_steps }),
   rejectPlan: (messageId: string, steps: any[]) => req("POST", "/api/advisor/reject", { messageId, steps }),
   scanOnboarding: () => req<any>("POST", "/api/advisor/onboarding/scan", {}),
+  getFirstInsight: () => req<any>("POST", "/api/advisor/first-insight", {}),
+  sendUniversal: (message: string, context?: string) => req<any>("POST", "/api/advisor/universal", { message, context }),
+  getDigest: () => req<any>("GET", "/api/advisor/digest"),
 
   // Cortex
   getCortexStatus: () => req<any>("GET", "/api/user/models"),

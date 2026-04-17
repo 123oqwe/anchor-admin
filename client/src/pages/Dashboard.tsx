@@ -81,10 +81,25 @@ export default function Dashboard() {
     api.updateState({ energy: next[0], focus: next[1], stress: next[2] }).catch(() => {});
   };
 
-  const handleQuickSubmit = (e: React.FormEvent) => {
+  const [quickResponse, setQuickResponse] = useState<string | null>(null);
+  const [quickLoading, setQuickLoading] = useState(false);
+  const [digest, setDigest] = useState<any>(null);
+
+  useEffect(() => {
+    api.getDigest().then(setDigest).catch(() => {});
+  }, []);
+
+  const handleQuickSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!quickInput.trim()) return;
-    window.location.href = "/advisor";
+    if (!quickInput.trim() || quickLoading) return;
+    setQuickLoading(true);
+    setQuickResponse(null);
+    try {
+      const result = await api.sendUniversal(quickInput, "Dashboard");
+      setQuickResponse(result.content?.slice(0, 300) ?? "Done");
+      setQuickInput("");
+    } catch { setQuickResponse("Something went wrong."); }
+    finally { setQuickLoading(false); }
   };
 
   const selectedDomain = domains.find(d => d.id === activeDomain);
@@ -166,15 +181,78 @@ export default function Dashboard() {
 
         {/* Quick Input */}
         <motion.section initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.5, delay: 0.2 }}>
+          {/* Universal Input — talk to Anchor from Dashboard */}
           <form onSubmit={handleQuickSubmit} className="relative">
             <div className="glass rounded-xl overflow-hidden flex items-center group focus-within:border-primary/30 transition-colors">
               <input type="text" value={quickInput} onChange={e => setQuickInput(e.target.value)}
-                placeholder="What's on your mind? Quick command to resolve something..."
-                className="flex-1 bg-transparent px-5 py-4 text-sm text-foreground placeholder:text-muted-foreground/60 focus:outline-none" />
-              <button type="submit" className="px-5 py-4 text-muted-foreground hover:text-primary transition-colors"><Send className="h-4 w-4" /></button>
+                placeholder="Talk to Anchor... ask anything, add a thought, or get a suggestion"
+                disabled={quickLoading}
+                className="flex-1 bg-transparent px-5 py-4 text-sm text-foreground placeholder:text-muted-foreground/60 focus:outline-none disabled:opacity-50" />
+              <button type="submit" disabled={quickLoading} className="px-5 py-4 text-muted-foreground hover:text-primary transition-colors disabled:opacity-30">
+                {quickLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
+              </button>
             </div>
           </form>
+          {quickResponse && (
+            <motion.div initial={{ opacity: 0, y: -5 }} animate={{ opacity: 1, y: 0 }}
+              className="glass rounded-xl p-4 mt-2">
+              <div className="flex items-start gap-2">
+                <Sparkles className="h-3.5 w-3.5 text-primary mt-0.5 shrink-0" />
+                <p className="text-sm text-foreground/80 leading-relaxed">{quickResponse}</p>
+              </div>
+              <button onClick={() => setQuickResponse(null)} className="text-[10px] text-muted-foreground mt-2 hover:text-foreground">dismiss</button>
+            </motion.div>
+          )}
         </motion.section>
+
+        {/* While You Were Away — digest panel */}
+        {digest?.hasUpdates && (
+          <motion.section initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.25 }}>
+            <div className="glass rounded-xl p-5 border border-primary/10">
+              <div className="flex items-center gap-2 mb-3">
+                <Sparkles className="h-4 w-4 text-primary" />
+                <span className="text-xs font-semibold text-foreground">While you were away</span>
+                <span className="text-[10px] text-muted-foreground ml-auto">{digest.agentActivity} agent actions</span>
+              </div>
+
+              {digest.urgentItems?.length > 0 && (
+                <div className="mb-3">
+                  <span className="text-[9px] text-red-400 uppercase tracking-wider">Needs attention</span>
+                  {digest.urgentItems.map((item: any, i: number) => (
+                    <div key={i} className="flex items-center gap-2 mt-1">
+                      <AlertCircle className="h-3 w-3 text-red-400 shrink-0" />
+                      <span className="text-xs text-foreground">{item.label}</span>
+                      <Badge className="text-[8px] bg-red-500/10 text-red-400">{item.status}</Badge>
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              {digest.newInsights?.length > 0 && (
+                <div className="mb-3">
+                  <span className="text-[9px] text-purple-400 uppercase tracking-wider">New insights</span>
+                  {digest.newInsights.map((ins: any, i: number) => (
+                    <p key={i} className="text-[11px] text-foreground/70 mt-1">
+                      <span className="text-purple-400">{ins.category}:</span> {ins.insight.slice(0, 80)}
+                    </p>
+                  ))}
+                </div>
+              )}
+
+              {digest.recentActions?.length > 0 && (
+                <div>
+                  <span className="text-[9px] text-muted-foreground uppercase tracking-wider">Recent actions</span>
+                  {digest.recentActions.slice(0, 3).map((a: any, i: number) => (
+                    <div key={i} className="flex items-center gap-2 mt-1 text-[10px] text-muted-foreground">
+                      <div className={`w-1 h-1 rounded-full ${a.status === "success" ? "bg-emerald-400" : "bg-red-400"}`} />
+                      <span>{a.agent}: {a.action}</span>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          </motion.section>
+        )}
 
         {/* Human Graph */}
         <motion.section initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.5, delay: 0.3 }}>

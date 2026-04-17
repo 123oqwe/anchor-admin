@@ -165,6 +165,104 @@ router.post("/reject", (req: Request, res: Response) => {
   res.json({ ok: true });
 });
 
+// ── First Insight (called after Onboarding) ─────────────────────────────────
+
+router.post("/first-insight", async (req: Request, res: Response) => {
+  try {
+    const history: any[] = [];
+    const result = await decide(
+      "Based on everything you know about me from my graph, give me the ONE most important thing I should focus on right now and WHY. Be specific, personal, and direct. Reference my actual goals and constraints.",
+      history
+    );
+
+    // Save as working memory so it persists
+    writeMemory({
+      type: "working",
+      title: "First Insight",
+      content: result.raw.slice(0, 300),
+      tags: ["onboarding", "first-insight"],
+      source: "Decision Agent",
+      confidence: 0.9,
+    });
+
+    res.json({
+      content: result.raw,
+      structured: result.structured,
+      packet: result.packet ? {
+        whyThisNow: result.packet.whyThisNow,
+        confidenceScore: result.packet.confidenceScore,
+      } : undefined,
+    });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ── Universal Input (talk to Anchor from any page) ──────────────────────────
+
+router.post("/universal", async (req: Request, res: Response) => {
+  const { message, context } = req.body;
+  if (!message) return res.status(400).json({ error: "message required" });
+
+  try {
+    const historyRows = db.prepare("SELECT role, content FROM messages WHERE user_id=? AND mode='personal' ORDER BY created_at DESC LIMIT 5").all(DEFAULT_USER_ID) as any[];
+    const history = historyRows.reverse().map(r => ({ role: (r.role === "user" ? "user" : "assistant") as "user" | "assistant", content: r.content as string }));
+
+    // Add page context if provided (e.g. "user is looking at Dashboard, overdue items")
+    const augmented = context ? `[Context: user is on ${context}]\n${message}` : message;
+
+    const result = await decide(augmented, history);
+
+    const msgId = nanoid();
+    const insertMsg = db.prepare("INSERT INTO messages (id, user_id, mode, role, content, draft_type, draft_status, agent_name) VALUES (?,?,?,?,?,?,?,?)");
+    insertMsg.run(nanoid(), DEFAULT_USER_ID, "personal", "user", message, null, null, null);
+    insertMsg.run(msgId, DEFAULT_USER_ID, "personal", result.isPlan ? "draft" : "advisor", result.raw, result.isPlan ? "plan" : null, result.isPlan ? "pending" : null, null);
+
+    writeMemory({ type: "episodic", title: `Conversation: ${message.slice(0, 50)}`, content: `User: ${message.slice(0, 150)} | Anchor: ${result.raw.slice(0, 150)}`, tags: extractConversationTags(message), source: "Decision Agent", confidence: 0.8 });
+    extractFromMessage(message);
+
+    res.json({
+      id: msgId, role: result.isPlan ? "draft" : "advisor", content: result.raw,
+      structured: result.structured,
+      packet: result.packet ? { whyThisNow: result.packet.whyThisNow, conflictFlags: result.packet.conflictFlags, confidenceScore: result.packet.confidenceScore } : undefined,
+    });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ── What happened while you were away ───────────────────────────────────────
+
+router.get("/digest", (_req, res) => {
+  // Get recent agent activity + proactive suggestions + new insights
+  const recentExecs = db.prepare(
+    "SELECT agent, action, status, created_at FROM agent_executions WHERE user_id=? AND created_at >= datetime('now', '-24 hours') ORDER BY created_at DESC LIMIT 15"
+  ).all(DEFAULT_USER_ID) as any[];
+
+  const newInsights = db.prepare(
+    "SELECT category, insight, confidence, created_at FROM twin_insights WHERE user_id=? AND created_at >= datetime('now', '-24 hours') ORDER BY created_at DESC LIMIT 5"
+  ).all(DEFAULT_USER_ID) as any[];
+
+  const workingMems = db.prepare(
+    "SELECT title, content, created_at FROM memories WHERE user_id=? AND type='working' AND created_at >= datetime('now', '-24 hours') ORDER BY created_at DESC LIMIT 5"
+  ).all(DEFAULT_USER_ID) as any[];
+
+  const urgentNodes = db.prepare(
+    "SELECT label, status, detail FROM graph_nodes WHERE user_id=? AND status IN ('overdue','delayed','decaying') ORDER BY CASE status WHEN 'overdue' THEN 0 WHEN 'delayed' THEN 1 ELSE 2 END LIMIT 5"
+  ).all(DEFAULT_USER_ID) as any[];
+
+  res.json({
+    agentActivity: recentExecs.length,
+    recentActions: recentExecs.slice(0, 5).map((e: any) => ({
+      agent: e.agent, action: e.action.slice(0, 80), status: e.status, at: e.created_at,
+    })),
+    newInsights: newInsights.map((i: any) => ({ category: i.category, insight: i.insight, confidence: i.confidence })),
+    workingMemory: workingMems.map((m: any) => ({ title: m.title, content: m.content.slice(0, 100) })),
+    urgentItems: urgentNodes.map((n: any) => ({ label: n.label, status: n.status, detail: n.detail.slice(0, 80) })),
+    hasUpdates: recentExecs.length > 0 || newInsights.length > 0 || urgentNodes.length > 0,
+  });
+});
+
 // ── General AI ───────────────────────────────────────────────────────────────
 
 router.post("/general", async (req: Request, res: Response) => {

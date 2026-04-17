@@ -84,6 +84,9 @@ export default function Onboarding() {
         await api.createNode({ domain: "growth", label: v, type: "value", status: "stable", captured: "Onboarding", detail: `Core value: ${v}` });
       }
 
+      // Generate first personalized insight (the magic moment)
+      try { await api.getFirstInsight(); } catch {}
+
       navigate("/dashboard");
     } catch {
       setSaving(false);
