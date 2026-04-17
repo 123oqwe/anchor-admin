@@ -97,6 +97,15 @@ router.post("/personal", async (req: Request, res: Response) => {
       timestamp: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
       draftType: result.isPlan ? "plan" : undefined, draftStatus: result.isPlan ? "pending" : undefined,
       structured: result.structured,
+      // Pass cognitive packet to frontend for transparency
+      packet: result.packet ? {
+        whyThisNow: result.packet.whyThisNow,
+        conflictFlags: result.packet.conflictFlags,
+        confidenceScore: result.packet.confidenceScore,
+        riskLevel: result.packet.riskLevel,
+        boundaryClassification: result.packet.boundaryClassification,
+        stagesTrace: result.packet.stagesTrace,
+      } : undefined,
     });
   } catch (err: any) {
     console.error("Decision Agent error:", err);

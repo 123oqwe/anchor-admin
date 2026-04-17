@@ -15,6 +15,7 @@ import { text } from "../infra/compute/index.js";
 import { serializeForPrompt as graphPrompt, serializeStateForPrompt, serializeEdgesForPrompt, getNodesByType } from "../graph/reader.js";
 import { serializeForPrompt as memoryPrompt, serializeTwinForPrompt } from "../memory/retrieval.js";
 import { type DecisionPacket, type ContextPacket, type StageTrace } from "./packets.js";
+import { shouldActivateSwarm, runSwarm } from "./swarm.js";
 
 export interface DecisionResult {
   raw: string;
@@ -133,7 +134,7 @@ export async function decide(
     task: "decision",
     system,
     messages: [...history, { role: "user", content: message }],
-    maxTokens: 1500,
+    maxTokens: 2500,
   });
 
   // Parse structured output
@@ -142,10 +143,19 @@ export async function decide(
 
   try {
     const stripped = raw.replace(/```json\s*/g, "").replace(/```/g, "");
-    const jsonMatch = stripped.match(/\{[\s\S]*\}/);
-    if (jsonMatch) {
-      const parsed = JSON.parse(jsonMatch[0]);
-      if (parsed?.type === "plan" && Array.isArray(parsed?.editable_steps)) {
+    let jsonStr = stripped.match(/\{[\s\S]*\}/)?.[0];
+    if (jsonStr) {
+      // Auto-repair truncated JSON
+      if (!jsonStr.trim().endsWith("}")) {
+        const open = (jsonStr.match(/\[/g) || []).length - (jsonStr.match(/\]/g) || []).length;
+        const braces = (jsonStr.match(/\{/g) || []).length - (jsonStr.match(/\}/g) || []).length;
+        jsonStr += "]".repeat(Math.max(0, open)) + "}".repeat(Math.max(0, braces));
+      }
+      let parsed: any;
+      try { parsed = JSON.parse(jsonStr); } catch {
+        try { parsed = JSON.parse(jsonStr.replace(/,\s*\]/, "]").replace(/,\s*\}/, "}")); } catch { parsed = null; }
+      }
+      if (parsed && parsed.type === "plan" && Array.isArray(parsed.editable_steps)) {
         structured = {
           type: parsed.type,
           suggestion_summary: parsed.suggestion_summary ?? "",
@@ -186,10 +196,39 @@ export async function decide(
         detectFailures(packet, message);
       }
     }
-  } catch {}
+  } catch (e) { /* JSON parse failed, return plain text */ }
 
-  // Trajectory confidence verification: independent cheap-model check
-  if (packet && packet.confidenceScore > 0) {
+  // Check if Swarm should be activated for complex decisions
+  if (packet && packet.type === "plan") {
+    const shouldSwarm = shouldActivateSwarm({
+      decisionConfidence: packet.confidenceScore,
+      stepCount: packet.candidates.length,
+      constraintCount: packet.conflictFlags.length,
+      isMultiDomain: (packet.candidates[0]?.referencedNodes?.length ?? 0) > 5,
+    });
+    if (shouldSwarm) {
+      console.log("[Decision Agent] Escalating to Swarm debate...");
+      const swarmResult = await runSwarm(message, graphPrompt(), memoryPrompt(message), serializeTwinForPrompt());
+      // Merge swarm result into packet
+      if (swarmResult.candidatePlans.length > 0) {
+        const plan = swarmResult.candidatePlans.find(p => p.recommended) ?? swarmResult.candidatePlans[0];
+        packet.candidates = plan.stages.map((s, i) => ({
+          id: i + 1, content: s, riskSignals: plan.risks, referencedNodes: [],
+        }));
+        packet.conflictFlags = [
+          ...packet.conflictFlags,
+          ...swarmResult.plannerDisagreements.filter(d => !d.resolved).map(d => `DEBATE: ${d.topic}`),
+        ];
+        if (structured) {
+          structured.editable_steps = plan.stages.map((s, i) => ({ id: i + 1, content: s }));
+          structured.conflict_flags = packet.conflictFlags;
+        }
+      }
+    }
+  }
+
+  // Trajectory confidence verification — only for plans with 3+ steps
+  if (packet && packet.type === "plan" && packet.candidates.length >= 3) {
     await verifyTrajectoryConfidence(packet, message);
   }
 

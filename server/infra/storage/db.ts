@@ -271,6 +271,13 @@ function seedIfEmpty() {
       [DEFAULT_USER_ID, "growth", "Communication Style", "pattern", "evolving", "Email + message analysis", "Becoming more concise over time. Prefer async over sync communication."],
       [DEFAULT_USER_ID, "health", "Sleep Pattern", "pattern", "declining", "Behavioral inference", "Average 5.5h last week. Below your 7h baseline. Affects afternoon energy."],
       [DEFAULT_USER_ID, "health", "Exercise Routine", "task", "inactive", "Calendar gap analysis", "No exercise events detected in 2 weeks. Previously 3x/week."],
+      // Values, Constraints, Preferences — so Decision Agent has a constitution from day 1
+      [DEFAULT_USER_ID, "growth", "Build something meaningful", "value", "stable", "Onboarding", "Core motivation: create technology that genuinely helps people make better decisions."],
+      [DEFAULT_USER_ID, "growth", "Honesty over comfort", "value", "stable", "Onboarding", "Prefer direct feedback even when uncomfortable. Don't sugarcoat."],
+      [DEFAULT_USER_ID, "finance", "Runway: 6 months", "constraint", "active", "Finance tracking", "Current runway is approximately 6 months at current burn rate. Hard deadline."],
+      [DEFAULT_USER_ID, "work", "YC Deadline: This Friday", "constraint", "active", "Calendar", "YC W26 application due this Friday. Non-negotiable."],
+      [DEFAULT_USER_ID, "growth", "Async over sync", "preference", "stable", "Communication analysis", "Strongly prefers email and Slack over phone calls and video meetings."],
+      [DEFAULT_USER_ID, "growth", "Deep work mornings", "preference", "stable", "Productivity analysis", "Most productive 10am-1pm. Protect this block for high-stakes work."],
     ];
     const ins = db.prepare("INSERT INTO graph_nodes (id, user_id, domain, label, type, status, captured, detail) VALUES (?,?,?,?,?,?,?,?)");
     const nodeIds: string[] = [];

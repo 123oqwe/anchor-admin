@@ -27,6 +27,9 @@ let pendingMessages: string[] = [];
 let debounceTimer: ReturnType<typeof setTimeout> | null = null;
 
 export function extractFromMessage(userMessage: string): void {
+  // Skip extraction for trivially short messages (greetings, "ok", "yes")
+  if (userMessage.trim().length < 20) return;
+
   pendingMessages.push(userMessage);
 
   if (debounceTimer) clearTimeout(debounceTimer);
