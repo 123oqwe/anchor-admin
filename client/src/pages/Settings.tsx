@@ -62,14 +62,18 @@ export default function Settings() {
   const [editingKey, setEditingKey] = useState<string | null>(null);
   const [keyInput, setKeyInput] = useState("");
 
+  // Integrations — loaded from API
+  const [integrationStatus, setIntegrationStatus] = useState<any>(null);
+
   // Load all settings from API on mount
   useEffect(() => {
     (async () => {
       try {
-        const [profile, settings, cortex] = await Promise.all([
+        const [profile, settings, cortex, intStatus] = await Promise.all([
           api.getProfile(),
           api.getSettings(),
           api.getCortexStatus().catch(() => null),
+          api.getIntegrationStatus().catch(() => null),
         ]);
 
         if (profile) {
@@ -108,6 +112,8 @@ export default function Settings() {
             keyMasked: s.keyMasked ?? null,
           })));
         }
+
+        if (intStatus) setIntegrationStatus(intStatus);
       } catch (err: any) {
         setError(err.message ?? "Failed to load settings");
       } finally {
@@ -419,26 +425,78 @@ export default function Settings() {
               </motion.div>
             )}
 
-            {/* Integrations — honest about status */}
+            {/* Integrations — real OAuth for Google, coming soon for others */}
             {activeSection === "integrations" && (
               <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="space-y-6">
+                {/* Google (Gmail + Calendar) — live OAuth */}
                 <div className="glass rounded-xl p-6">
-                  <h2 className="text-lg font-semibold mb-2">Integrations</h2>
-                  <p className="text-xs text-muted-foreground mb-4">Connect external services to enrich your Human Graph</p>
+                  <h2 className="text-lg font-semibold mb-2">Google (Gmail + Calendar)</h2>
+                  <p className="text-xs text-muted-foreground mb-4">
+                    Scan your emails and calendar to automatically build your Human Graph — contacts, meetings, follow-ups, patterns.
+                  </p>
+                  {(() => {
+                    const google = (integrationStatus as any)?.google;
+                    if (!google) return <p className="text-xs text-muted-foreground">Loading...</p>;
+                    if (google.connected) {
+                      return (
+                        <div className="space-y-3">
+                          <div className="flex items-center gap-2">
+                            <Check className="h-4 w-4 text-emerald-400" />
+                            <span className="text-sm text-emerald-400 font-medium">Connected</span>
+                            {google.lastScan && (
+                              <span className="text-[10px] text-muted-foreground ml-auto">
+                                Last scan: {google.lastScan.eventsFetched} events, {google.lastScan.nodesCreated} nodes
+                              </span>
+                            )}
+                          </div>
+                          <div className="flex gap-2">
+                            <button onClick={async () => { await api.triggerGoogleScan(); toast.success("Scan started"); }}
+                              className="px-3 py-1.5 rounded-lg bg-primary/10 text-primary text-xs font-medium hover:bg-primary/20">
+                              Scan Now
+                            </button>
+                            <button onClick={async () => {
+                              if (!window.confirm("Disconnect Google? This won't delete data already scanned.")) return;
+                              await api.disconnectGoogle();
+                              setIntegrationStatus((prev: any) => ({ ...prev, google: { connected: false } }));
+                              toast.success("Google disconnected");
+                            }}
+                              className="px-3 py-1.5 rounded-lg text-xs text-muted-foreground hover:text-red-400">
+                              Disconnect
+                            </button>
+                          </div>
+                        </div>
+                      );
+                    }
+                    return (
+                      <button onClick={async () => {
+                        try {
+                          const { url } = await api.getGoogleConnectUrl();
+                          window.location.href = url;
+                        } catch { toast.error("Google OAuth not configured. Set GOOGLE_CLIENT_ID in .env"); }
+                      }}
+                        className="px-4 py-2 rounded-lg bg-primary text-primary-foreground text-sm font-medium hover:bg-primary/90">
+                        Connect Google
+                      </button>
+                    );
+                  })()}
+                </div>
+
+                {/* Future integrations */}
+                <div className="glass rounded-xl p-6">
+                  <h2 className="text-lg font-semibold mb-2">More Integrations</h2>
                   <div className="space-y-3">
                     {[
-                      { name: "Google Calendar", status: "coming soon", desc: "Sync meetings and events" },
-                      { name: "Gmail", status: "coming soon", desc: "Analyze email patterns and relationships" },
-                      { name: "Notion", status: "coming soon", desc: "Import notes and documents" },
-                      { name: "Slack", status: "coming soon", desc: "Track communication patterns" },
-                      { name: "Linear", status: "coming soon", desc: "Sync project tasks" },
+                      { name: "Notion", desc: "Import notes and documents" },
+                      { name: "Slack", desc: "Track communication patterns" },
+                      { name: "Linear", desc: "Sync project tasks" },
+                      { name: "LinkedIn", desc: "Professional network" },
                     ].map((integration) => (
                       <div key={integration.name} className="flex items-center justify-between glass rounded-lg px-4 py-3">
                         <div>
                           <span className="text-sm font-medium text-foreground">{integration.name}</span>
                           <p className="text-[10px] text-muted-foreground mt-0.5">{integration.desc}</p>
                         </div>
-                        <Badge className="text-[10px] bg-muted text-muted-foreground">{integration.status}</Badge>
+                        <Badge className="text-[10px] bg-muted text-muted-foreground">coming soon</Badge>
                       </div>
                     ))}
                   </div>

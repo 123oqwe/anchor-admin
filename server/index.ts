@@ -28,6 +28,7 @@ import advisorRoutes from "./routes/advisor.js";
 import adminRoutes from "./routes/admin.js";
 import skillsRoutes from "./routes/skills.js";
 import preferencesRoutes from "./routes/preferences.js";
+import integrationsRoutes from "./routes/integrations.js";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -50,6 +51,7 @@ async function startServer() {
   app.use("/api/admin", adminRoutes);
   app.use("/api/skills", skillsRoutes);
   app.use("/api/preferences", preferencesRoutes);
+  app.use("/api/integrations", integrationsRoutes);
 
   // ── Static / SPA ──────────────────────────────────────────────────────────
   const staticPath =

@@ -7,6 +7,7 @@ import { runDream } from "../memory/dream.js";
 import { detectDrift } from "../cognition/twin.js";
 import { checkProactiveTriggers } from "./enforcement.js";
 import { markStaleAsDecaying } from "../graph/writer.js";
+import { runIngestion } from "../integrations/pipeline.js";
 
 function log(agent: string, action: string, status = "success") {
   db.prepare("INSERT INTO agent_executions (id, user_id, agent, action, status) VALUES (?,?,?,?,?)")
@@ -110,6 +111,18 @@ schedule("0 3 * * *", async () => {
     }
   } catch (err: any) {
     console.error("[Cron] Dream consolidation failed:", err.message);
+  }
+});
+
+// ── Every 6 hours — Ingestion Pipeline (Gmail + Calendar scan) ───────────────
+schedule("0 */6 * * *", async () => {
+  try {
+    const result = await runIngestion(DEFAULT_USER_ID, "incremental");
+    if (result && result.eventsFetched > 0) {
+      log("Ingestion Pipeline", `Incremental: ${result.eventsFetched} events → ${result.nodesCreated} nodes`);
+    }
+  } catch (err: any) {
+    console.error("[Cron] Ingestion failed:", err.message);
   }
 });
 

@@ -85,4 +85,10 @@ export const api = {
   getOverrides: () => req<Record<string, string>>("GET", "/api/admin/overrides"),
   setOverride: (task: string, modelId: string) => req("PUT", `/api/admin/overrides/${task}`, { modelId }),
   clearOverride: (task: string) => req("DELETE", `/api/admin/overrides/${task}`),
+
+  // Integrations
+  getIntegrationStatus: () => req<any>("GET", "/api/integrations/status"),
+  getGoogleConnectUrl: () => req<any>("GET", "/api/integrations/google/connect"),
+  disconnectGoogle: () => req("DELETE", "/api/integrations/google", {}),
+  triggerGoogleScan: () => req<any>("POST", "/api/integrations/google/scan", {}),
 };

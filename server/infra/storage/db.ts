@@ -339,6 +339,38 @@ db.exec(`
   );
 
   CREATE INDEX IF NOT EXISTS idx_events_type ON events(type, created_at);
+
+  -- OAuth tokens for external integrations
+  CREATE TABLE IF NOT EXISTS oauth_tokens (
+    id TEXT PRIMARY KEY,
+    user_id TEXT NOT NULL,
+    provider TEXT NOT NULL,
+    access_token TEXT NOT NULL,
+    refresh_token TEXT,
+    expires_at TEXT NOT NULL,
+    scope TEXT NOT NULL DEFAULT '',
+    created_at TEXT NOT NULL DEFAULT (datetime('now')),
+    updated_at TEXT NOT NULL DEFAULT (datetime('now')),
+    UNIQUE(user_id, provider)
+  );
+
+  CREATE INDEX IF NOT EXISTS idx_oauth_user ON oauth_tokens(user_id, provider);
+
+  -- Ingestion run log
+  CREATE TABLE IF NOT EXISTS ingestion_log (
+    id TEXT PRIMARY KEY,
+    user_id TEXT NOT NULL,
+    source TEXT NOT NULL,
+    run_type TEXT NOT NULL,
+    status TEXT NOT NULL DEFAULT 'running',
+    events_fetched INTEGER NOT NULL DEFAULT 0,
+    nodes_created INTEGER NOT NULL DEFAULT 0,
+    error TEXT,
+    started_at TEXT NOT NULL DEFAULT (datetime('now')),
+    finished_at TEXT
+  );
+
+  CREATE INDEX IF NOT EXISTS idx_ingestion_user ON ingestion_log(user_id, source, started_at);
 `);
 
 // ─── Default user seed ────────────────────────────────────────────────────────
@@ -350,147 +382,24 @@ function seedIfEmpty() {
   if (user) return;
 
   const run = db.transaction(() => {
+    // Only create empty user shell — real data comes from Onboarding
     db.prepare("INSERT INTO users (id, name, email, role) VALUES (?, ?, ?, ?)").run(
-      DEFAULT_USER_ID, "Anchor User", "user@anchor.ai", "Founder"
+      DEFAULT_USER_ID, "", "", ""
     );
-
     db.prepare("INSERT INTO user_state (user_id) VALUES (?)").run(DEFAULT_USER_ID);
     db.prepare("INSERT INTO settings (user_id) VALUES (?)").run(DEFAULT_USER_ID);
-    db.prepare("INSERT INTO twin_evolution (user_id, xp) VALUES (?, ?)").run(DEFAULT_USER_ID, 127);
+    db.prepare("INSERT INTO twin_evolution (user_id, xp) VALUES (?, ?)").run(DEFAULT_USER_ID, 0);
 
-    // Graph nodes
-    const nodes = [
-      [DEFAULT_USER_ID, "work", "YC Application", "goal", "delayed", "Command input, 3 days ago", "Delayed 3 times. Highest priority — completing unlocks 2 downstream tasks."],
-      [DEFAULT_USER_ID, "work", "Product Roadmap v2", "goal", "active", "Workspace project creation", "On track. 60% complete, next milestone: user testing framework."],
-      [DEFAULT_USER_ID, "work", "Technical Architecture", "task", "in-progress", "Advisor conversation, 2 days ago", "Backend integration plan drafted. Needs CTO review."],
-      [DEFAULT_USER_ID, "work", "Hire CTO", "opportunity", "active", "Email thread analysis", "3 candidates in pipeline. Alex Rivera strongest — schedule intro call."],
-      [DEFAULT_USER_ID, "work", "Team Standup", "task", "overdue", "Calendar sync", "Missed last 2 standups. Team morale risk detected."],
-      [DEFAULT_USER_ID, "relationships", "Matt Zhang", "person", "decaying", "Calendar sync, last meeting 5 days ago", "3 days silent. Previously discussed Series B prep — should follow up."],
-      [DEFAULT_USER_ID, "relationships", "Sarah Chen (Sequoia)", "person", "decaying", "Email thread analysis", "Investor contact. Follow-up overdue by 4 days."],
-      [DEFAULT_USER_ID, "relationships", "Alex Rivera (CTO candidate)", "person", "opportunity", "LinkedIn + email", "Strong technical background. Intro call not yet scheduled."],
-      [DEFAULT_USER_ID, "relationships", "Co-founder Alignment", "pattern", "stable", "Meeting analysis", "Communication frequency healthy. Last sync: yesterday."],
-      [DEFAULT_USER_ID, "finance", "Pre-Seed Fundraising", "goal", "active", "Workspace project", "$500K target. 2 warm intros pending. Pitch deck needs metrics update."],
-      [DEFAULT_USER_ID, "finance", "Investor Follow-up", "task", "overdue", "Draft center, auto-detected", "3 investor emails pending response. Average delay: 4 days."],
-      [DEFAULT_USER_ID, "finance", "Runway Calculation", "task", "todo", "Advisor suggestion", "Current burn rate unknown. Should calculate before next investor meeting."],
-      [DEFAULT_USER_ID, "growth", "Decision Pattern: Avoidance", "pattern", "worsening", "Twin Agent analysis, 3 months", "You delay high-stakes decisions by 2-3 days. Writing tasks are most avoided."],
-      [DEFAULT_USER_ID, "growth", "Productivity Cycle", "pattern", "stable", "Behavioral analysis", "Peak: 10am-1pm. Significant drop after 3pm. Optimize scheduling accordingly."],
-      [DEFAULT_USER_ID, "growth", "Communication Style", "pattern", "evolving", "Email + message analysis", "Becoming more concise over time. Prefer async over sync communication."],
-      [DEFAULT_USER_ID, "health", "Sleep Pattern", "pattern", "declining", "Behavioral inference", "Average 5.5h last week. Below your 7h baseline. Affects afternoon energy."],
-      [DEFAULT_USER_ID, "health", "Exercise Routine", "task", "inactive", "Calendar gap analysis", "No exercise events detected in 2 weeks. Previously 3x/week."],
-      // Values, Constraints, Preferences — so Decision Agent has a constitution from day 1
-      [DEFAULT_USER_ID, "growth", "Build something meaningful", "value", "stable", "Onboarding", "Core motivation: create technology that genuinely helps people make better decisions."],
-      [DEFAULT_USER_ID, "growth", "Honesty over comfort", "value", "stable", "Onboarding", "Prefer direct feedback even when uncomfortable. Don't sugarcoat."],
-      [DEFAULT_USER_ID, "finance", "Runway: 6 months", "constraint", "active", "Finance tracking", "Current runway is approximately 6 months at current burn rate. Hard deadline."],
-      [DEFAULT_USER_ID, "work", "YC Deadline: This Friday", "constraint", "active", "Calendar", "YC W26 application due this Friday. Non-negotiable."],
-      [DEFAULT_USER_ID, "growth", "Async over sync", "preference", "stable", "Communication analysis", "Strongly prefers email and Slack over phone calls and video meetings."],
-      [DEFAULT_USER_ID, "growth", "Deep work mornings", "preference", "stable", "Productivity analysis", "Most productive 10am-1pm. Protect this block for high-stakes work."],
-    ];
-    const ins = db.prepare("INSERT INTO graph_nodes (id, user_id, domain, label, type, status, captured, detail) VALUES (?,?,?,?,?,?,?,?)");
-    const nodeIds: string[] = [];
-    for (const n of nodes) { const id = nanoid(); ins.run(id, ...n); nodeIds.push(id); }
-
-    // Seed edges (relationships between nodes)
-    // nodeIds index matches nodes array order above
-    const insEdge = db.prepare("INSERT INTO graph_edges (id, user_id, from_node_id, to_node_id, type, weight) VALUES (?,?,?,?,?,?)");
-    const seedEdges: [number, number, string, number][] = [
-      // YC Application depends_on Product Roadmap
-      [0, 1, "depends_on", 1.0],
-      // Technical Architecture supports YC Application
-      [2, 0, "supports", 0.8],
-      // Hire CTO supports Product Roadmap
-      [3, 1, "supports", 0.9],
-      // Team Standup supports Product Roadmap
-      [4, 1, "supports", 0.5],
-      // Matt Zhang contextual to Product Roadmap
-      [5, 1, "contextual", 0.7],
-      // Sarah Chen contextual to Pre-Seed Fundraising
-      [6, 9, "contextual", 0.9],
-      // Alex Rivera contextual to Hire CTO
-      [7, 3, "contextual", 0.8],
-      // Pre-Seed Fundraising depends_on YC Application
-      [9, 0, "depends_on", 0.7],
-      // Investor Follow-up supports Pre-Seed Fundraising
-      [10, 9, "supports", 0.8],
-      // Decision Pattern threatens YC Application (avoidance causes delay)
-      [12, 0, "threatens", 0.6],
-    ];
-    for (const [fromIdx, toIdx, type, weight] of seedEdges) {
-      if (nodeIds[fromIdx] && nodeIds[toIdx]) {
-        insEdge.run(nanoid(), DEFAULT_USER_ID, nodeIds[fromIdx], nodeIds[toIdx], type, weight);
-      }
-    }
-
-    // Memories
-    const mems = [
-      [DEFAULT_USER_ID, "working", "YC Application — Current Focus", "Active task: Refine 'Why Now' section. Key angle: behavioral insight + market timing. Co-founder feedback pending. Deadline: This Friday.", '["YC","application","active"]', "Workspace project", 0.95],
-      [DEFAULT_USER_ID, "episodic", "Meeting with Matt Zhang — Product Strategy", "Discussed go-to-market strategy for Anchor. Matt suggested focusing on founder persona first. Agreed to follow up with detailed user journey. Matt mentioned potential intro to a16z partner.", '["Matt Zhang","strategy","meeting"]', "Calendar + conversation analysis", 0.88],
-      [DEFAULT_USER_ID, "episodic", "Investor Call — Pre-Seed Discussion", "30-min call with Sarah Chen from Sequoia Scout. She was interested in the Human Graph concept. Asked about defensibility and data moat. Follow-up requested with technical architecture doc.", '["investor","Sequoia","fundraising"]', "Call transcript analysis", 0.82],
-      [DEFAULT_USER_ID, "semantic", "Decision Pattern: Avoidance Behavior", "Long-term pattern: You tend to delay confrontation-related tasks by an average of 4.2 days. This pattern has been consistent across 23 observed instances.", '["pattern","avoidance","behavioral"]', "Twin Agent behavioral analysis", 0.91],
-      [DEFAULT_USER_ID, "semantic", "Preference: Communication Style", "You prefer concise emails averaging 47 words. Response rate increases 34% when emails contain a specific ask in the first sentence.", '["preference","email","communication"]', "Email pattern analysis", 0.87],
-      [DEFAULT_USER_ID, "working", "CTO Search — Active Pipeline", "3 candidates in review. Alex Rivera top choice — ex-CTO of YC W22 startup, strong distributed systems background. Intro call not yet scheduled.", '["CTO","hiring","pipeline"]', "Workspace + email analysis", 0.92],
-    ];
-    const insMem = db.prepare("INSERT INTO memories (id, user_id, type, title, content, tags, source, confidence) VALUES (?,?,?,?,?,?,?,?)");
-    for (const m of mems) insMem.run(nanoid(), ...m);
-
-    // Projects
-    const p1id = nanoid(), p2id = nanoid(), p3id = nanoid();
-    db.prepare("INSERT INTO projects (id, user_id, name, description, color) VALUES (?,?,?,?,?)").run(p1id, DEFAULT_USER_ID, "YC Application", "Complete and submit Y Combinator W26 application", "bg-blue-500");
-    db.prepare("INSERT INTO projects (id, user_id, name, description, color) VALUES (?,?,?,?,?)").run(p2id, DEFAULT_USER_ID, "CTO Hiring Pipeline", "Find and onboard a technical co-founder / CTO", "bg-emerald-500");
-    db.prepare("INSERT INTO projects (id, user_id, name, description, color) VALUES (?,?,?,?,?)").run(p3id, DEFAULT_USER_ID, "Fundraising — Pre-Seed", "Close $500K pre-seed round", "bg-amber-500");
-
-    const insTask = db.prepare("INSERT INTO tasks (id, project_id, parent_id, title, status, priority, tags, due_date) VALUES (?,?,?,?,?,?,?,?)");
-    const t1id = nanoid(), t2id = nanoid(), t3id = nanoid(), t4id = nanoid();
-    insTask.run(t1id, p1id, null, "Refine 'Why Now' section", "in-progress", "high", '["writing","deadline"]', "Tomorrow");
-    insTask.run(nanoid(), p1id, t1id, "Research market timing data", "done", "medium", "[]", null);
-    insTask.run(nanoid(), p1id, t1id, "Draft behavioral insight angle", "in-progress", "high", "[]", null);
-    insTask.run(nanoid(), p1id, t1id, "Get co-founder review", "todo", "medium", "[]", null);
-    insTask.run(nanoid(), p1id, null, "Record 1-minute founder video", "todo", "medium", '["video","creative"]', "Friday");
-    insTask.run(nanoid(), p1id, null, "Finalize team section", "done", "low", '["writing"]', null);
-    insTask.run(nanoid(), p1id, null, "Technical architecture appendix", "todo", "medium", '["technical"]', "Thursday");
-    insTask.run(nanoid(), p2id, null, "Schedule intro call with Alex Rivera", "in-progress", "high", '["urgent"]', "Thursday");
-    insTask.run(nanoid(), p2id, null, "Review 2 other candidates", "todo", "medium", '["review"]', null);
-    insTask.run(nanoid(), p2id, null, "Prepare technical assessment", "done", "medium", '["assessment"]', null);
-    insTask.run(nanoid(), p3id, null, "Follow up with Sarah Chen/Sequoia", "blocked", "high", '["investor","overdue"]', "Overdue");
-    insTask.run(nanoid(), p3id, null, "Prepare technical architecture doc", "todo", "high", '["technical"]', "Next week");
-    insTask.run(nanoid(), p3id, null, "Update pitch deck", "todo", "medium", '["deck"]', null);
-
-    // Agent executions seed
-    const insExec = db.prepare("INSERT INTO agent_executions (id, user_id, agent, action, status) VALUES (?,?,?,?,?)");
-    insExec.run(nanoid(), DEFAULT_USER_ID, "Decision Agent", "Priority inference — surfaced YC application", "success");
-    insExec.run(nanoid(), DEFAULT_USER_ID, "Observation Agent", "Scanned 14 new emails, 3 calendar events", "success");
-    insExec.run(nanoid(), DEFAULT_USER_ID, "Memory Agent", "Indexed 5 new memory items", "success");
-    insExec.run(nanoid(), DEFAULT_USER_ID, "Twin Agent", "Updated behavioral pattern confidence scores", "success");
-
-    // Twin quests
+    // Starter quests (these are system-defined, not user data)
     const insQuest = db.prepare("INSERT INTO twin_quests (id, user_id, name, description, progress, total, xp_reward, completed) VALUES (?,?,?,?,?,?,?,?)");
-    insQuest.run(nanoid(), DEFAULT_USER_ID, "First 50 Interactions", "Complete 50 conversations with your advisor", 50, 50, 30, 1);
-    insQuest.run(nanoid(), DEFAULT_USER_ID, "State Check-in Streak", "Update your state 7 days in a row", 7, 7, 20, 1);
-    insQuest.run(nanoid(), DEFAULT_USER_ID, "Graph Calibration", "Add 14 nodes to your Human Graph", 14, 14, 50, 1);
-    insQuest.run(nanoid(), DEFAULT_USER_ID, "Approve 20 Drafts", "Review and approve 20 AI-generated drafts", 16, 20, 40, 0);
-    insQuest.run(nanoid(), DEFAULT_USER_ID, "Follow 10 Suggestions", "Act on 10 advisor suggestions", 7, 10, 35, 0);
-    insQuest.run(nanoid(), DEFAULT_USER_ID, "Avoidance Breakthrough", "Complete 3 tasks you previously avoided", 2, 3, 50, 0);
-
-    // Twin insights
-    const insInsight = db.prepare("INSERT INTO twin_insights (id, user_id, category, insight, confidence, trend) VALUES (?,?,?,?,?,?)");
-    insInsight.run(nanoid(), DEFAULT_USER_ID, "Decision Style", "Delays high-stakes decisions 2-3 days. When you do act, 78% lead to positive outcomes.", 0.82, "stable");
-    insInsight.run(nanoid(), DEFAULT_USER_ID, "Risk Preference", "Moderate risk tolerance for business decisions, conservative for personal. Avoids confrontation.", 0.75, "evolving");
-    insInsight.run(nanoid(), DEFAULT_USER_ID, "Behavioral Pattern", "Peak productivity 10am-1pm. Energy drops significantly after 3pm. Procrastinates on writing tasks.", 0.91, "stable");
-
-    // Initial advisor messages
-    const insMsgStmt = db.prepare("INSERT INTO messages (id, user_id, mode, role, content, draft_type, draft_status, agent_name) VALUES (?,?,?,?,?,?,?,?)");
-    insMsgStmt.run(nanoid(), DEFAULT_USER_ID, "personal", "advisor",
-      "Based on your Human Graph, I see 3 areas needing attention. Your YC application has been delayed 3 times — this is your highest priority. You're also avoiding investor follow-ups. Would you like me to create a focused plan?",
-      null, null, null);
-    insMsgStmt.run(nanoid(), DEFAULT_USER_ID, "general", "advisor",
-      "General mode connected. I can help with any question — research, analysis, writing, brainstorming. Unlike Personal mode, I don't reference your Human Graph here. What would you like to explore?",
-      null, null, null);
-    insMsgStmt.run(nanoid(), DEFAULT_USER_ID, "agent", "advisor",
-      "Agent Mode active. Describe what you need done, and I'll create a specialized agent to execute it. The agent will generate a plan, show you each step, and only execute with your approval.",
-      null, null, null);
+    insQuest.run(nanoid(), DEFAULT_USER_ID, "First 10 Interactions", "Have 10 conversations with your advisor", 0, 10, 30, 0);
+    insQuest.run(nanoid(), DEFAULT_USER_ID, "Graph Builder", "Add 10 nodes to your Human Graph", 0, 10, 50, 0);
+    insQuest.run(nanoid(), DEFAULT_USER_ID, "Plan Reviewer", "Review and approve 5 AI-generated plans", 0, 5, 40, 0);
+    insQuest.run(nanoid(), DEFAULT_USER_ID, "Memory Maker", "Create 5 memories through conversations", 0, 5, 20, 0);
   });
 
   run();
-  console.log("✅ Database seeded with default data");
+  console.log("✅ Database initialized (empty — ready for Onboarding)");
 }
 
 // Migrate: add new columns to skills table (safe for existing DBs)

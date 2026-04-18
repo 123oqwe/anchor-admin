@@ -252,3 +252,8 @@ async function doExtraction(combinedMessage: string): Promise<void> {
     log("Observation Agent", `Extraction failed: ${err.message}`, "failed");
   }
 }
+
+/** Direct extraction from text — used by ingestion pipeline (no debounce). */
+export async function extractFromText(text: string): Promise<void> {
+  await doExtraction(text);
+}
