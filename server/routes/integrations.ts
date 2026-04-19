@@ -68,15 +68,23 @@ router.post("/local/scan/calendar", async (_req, res) => {
 
 router.get("/finance", (_req, res) => {
   const { getFinanceSnapshot } = require("../integrations/local/finance.js");
-  res.json(getFinanceSnapshot() ?? { balance: 0, monthlyBurn: 0, monthlyIncome: 0, runway: 0 });
+  res.json(getFinanceSnapshot() ?? { balance: 0, monthlyBurn: 0, monthlyIncome: 0, runway: 0, categories: [], trend: [], risks: [] });
 });
 
 router.post("/finance", (req, res) => {
-  const { balance, monthlyBurn, monthlyIncome } = req.body;
+  const { balance, monthlyBurn, monthlyIncome, categories } = req.body;
   if (balance == null || monthlyBurn == null) return res.status(400).json({ error: "balance and monthlyBurn required" });
   const { saveFinanceSnapshot } = require("../integrations/local/finance.js");
-  const snapshot = saveFinanceSnapshot({ balance, monthlyBurn, monthlyIncome });
+  const snapshot = saveFinanceSnapshot({ balance, monthlyBurn, monthlyIncome, categories });
   res.json(snapshot);
+});
+
+router.post("/finance/expense", (req, res) => {
+  const { category, amount, note } = req.body;
+  if (!category || !amount) return res.status(400).json({ error: "category and amount required" });
+  const { addExpense } = require("../integrations/local/finance.js");
+  addExpense({ category, amount, note });
+  res.json({ ok: true });
 });
 
 // ── People extraction (direct, no LLM) ─────────────────────────────────────

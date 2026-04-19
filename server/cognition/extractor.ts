@@ -103,6 +103,14 @@ Node types: goal, project, commitment, task, person, value, constraint, preferen
 Edge types: depends_on, blocks, aligns_with, conflicts_with, supports, threatens, contextual
 Domains: work, relationships, finance, health, growth
 
+DOMAIN RULES:
+- finance = ONLY personal money: balance, spending, income, runway, investments. NOT courses/study about finance.
+- work = career, projects, courses, academic work, side projects, freelance
+- "Finance course" or "Valuation study" → domain: work (it is academic work, not personal money)
+- relationships = people only
+- health = physical/mental health, sleep, exercise, energy
+- growth = personal development, values, long-term patterns
+
 Respond ONLY with valid JSON:
 {
   "new_nodes": [

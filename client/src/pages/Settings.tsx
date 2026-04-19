@@ -552,8 +552,8 @@ export default function Settings() {
                     <Key className="h-4 w-4 text-emerald-400" />
                     <h2 className="text-lg font-semibold">Finance Tracker</h2>
                   </div>
-                  <p className="text-xs text-muted-foreground mb-4">Track your runway. Enter your current balance and monthly burn rate.</p>
-                  <div className="grid grid-cols-2 gap-3">
+                  <p className="text-xs text-muted-foreground mb-4">Track your real money. Balance, burn, income → runway calculation.</p>
+                  <div className="grid grid-cols-3 gap-3">
                     <div>
                       <label className="text-[10px] text-muted-foreground block mb-1">Balance ($)</label>
                       <input type="number" placeholder="15000" id="fin-balance"
@@ -564,17 +564,28 @@ export default function Settings() {
                       <input type="number" placeholder="3000" id="fin-burn"
                         className="w-full glass rounded-lg px-3 py-2 text-sm text-foreground focus:outline-none" />
                     </div>
+                    <div>
+                      <label className="text-[10px] text-muted-foreground block mb-1">Monthly Income ($)</label>
+                      <input type="number" placeholder="1500" id="fin-income"
+                        className="w-full glass rounded-lg px-3 py-2 text-sm text-foreground focus:outline-none" />
+                    </div>
                   </div>
                   <button onClick={async () => {
                     const balance = parseInt((document.getElementById("fin-balance") as HTMLInputElement)?.value || "0");
                     const monthlyBurn = parseInt((document.getElementById("fin-burn") as HTMLInputElement)?.value || "0");
+                    const monthlyIncome = parseInt((document.getElementById("fin-income") as HTMLInputElement)?.value || "0");
                     if (balance > 0 && monthlyBurn > 0) {
-                      await fetch("/api/integrations/finance", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ balance, monthlyBurn }) });
-                      toast.success(`Runway: ${(balance / monthlyBurn).toFixed(1)} months`);
+                      const res = await fetch("/api/integrations/finance", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ balance, monthlyBurn, monthlyIncome }) }).then(r => r.json());
+                      const runway = res.runway;
+                      if (runway < 3) toast.error(`Critical: ${runway} months runway`);
+                      else if (runway < 6) toast.warning(`Warning: ${runway} months runway`);
+                      else toast.success(`Runway: ${runway} months`);
+                      if (res.risks?.length > 0) toast(res.risks[0]);
                     }
                   }} className="mt-3 px-4 py-2 rounded-lg bg-emerald-500/10 text-emerald-400 text-xs font-medium hover:bg-emerald-500/20">
                     Calculate Runway
                   </button>
+                  <p className="text-[10px] text-muted-foreground mt-2">Finance domain = only real money. Courses like "Valuation Study" belong in Work.</p>
                 </div>
 
                 {/* Future integrations */}
