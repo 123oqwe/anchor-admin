@@ -27,12 +27,125 @@ import { api } from "@/lib/api";
 const settingSections = [
   { id: "profile", label: "Profile", icon: User },
   { id: "models", label: "AI Models", icon: Brain },
+  { id: "automations", label: "Automations", icon: Zap },
   { id: "privacy", label: "Privacy & Trust", icon: Shield },
   { id: "notifications", label: "Notifications", icon: Bell },
   { id: "appearance", label: "Appearance", icon: Palette },
   { id: "integrations", label: "Integrations", icon: Globe },
   { id: "api", label: "API Keys", icon: Key },
 ];
+
+/** Automations list — user's custom crons */
+function AutomationsList() {
+  const [crons, setCrons] = useState<any[]>([]);
+  const [name, setName] = useState("");
+  const [pattern, setPattern] = useState("0 9 * * *");
+  useEffect(() => { fetch("/api/crons").then(r => r.json()).then(setCrons).catch(() => {}); }, []);
+
+  return (
+    <div className="space-y-2">
+      {crons.map((c: any) => (
+        <div key={c.id} className="flex items-center gap-2 text-xs glass rounded-lg px-3 py-2">
+          <span className={`w-2 h-2 rounded-full ${c.enabled ? "bg-emerald-400" : "bg-muted-foreground/30"}`} />
+          <span className="text-foreground flex-1">{c.name}</span>
+          <span className="text-[10px] text-muted-foreground font-mono">{c.cron_pattern}</span>
+          <button onClick={async () => {
+            await fetch(`/api/crons/${c.id}/toggle`, { method: "POST" });
+            setCrons(await fetch("/api/crons").then(r => r.json()));
+          }} className="text-[10px] text-primary">
+            {c.enabled ? "Pause" : "Enable"}
+          </button>
+          <button onClick={async () => {
+            await fetch(`/api/crons/${c.id}`, { method: "DELETE" });
+            setCrons(crons.filter(x => x.id !== c.id));
+          }} className="text-[10px] text-red-400">×</button>
+        </div>
+      ))}
+      {crons.length === 0 && <p className="text-xs text-muted-foreground/40">No automations yet.</p>}
+      <div className="flex gap-2 mt-2">
+        <input value={name} onChange={e => setName(e.target.value)} placeholder="Remind me to..."
+          className="flex-1 glass rounded-lg px-3 py-1.5 text-xs text-foreground focus:outline-none" />
+        <select value={pattern} onChange={e => setPattern(e.target.value)} className="glass rounded-lg px-2 py-1.5 text-xs bg-transparent">
+          <option value="0 9 * * *">Daily 9am</option>
+          <option value="0 9 * * 1">Weekly Mon</option>
+          <option value="0 9 * * 5">Weekly Fri</option>
+          <option value="0 */6 * * *">Every 6h</option>
+        </select>
+        <button onClick={async () => {
+          if (!name.trim()) return;
+          await fetch("/api/crons", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ name, cron_pattern: pattern, action_type: "remind", action_config: { message: name } }) });
+          setName("");
+          setCrons(await fetch("/api/crons").then(r => r.json()));
+          toast.success("Automation created");
+        }} className="px-3 py-1.5 rounded-lg bg-primary/10 text-primary text-xs">Add</button>
+      </div>
+    </div>
+  );
+}
+
+/** Skill templates — one-click install */
+function SkillTemplates() {
+  const [templates, setTemplates] = useState<any[]>([]);
+  const [skills, setSkills] = useState<any[]>([]);
+  useEffect(() => {
+    fetch("/api/skills/templates").then(r => r.json()).then(setTemplates).catch(() => {});
+    fetch("/api/skills").then(r => r.json()).then(setSkills).catch(() => {});
+  }, []);
+  const installed = new Set(skills.map((s: any) => s.name));
+
+  return (
+    <div className="space-y-2">
+      {templates.map((t: any, i: number) => (
+        <div key={t.name} className="flex items-center gap-3 glass rounded-lg px-3 py-2.5">
+          <span className="text-primary">⚡</span>
+          <div className="flex-1">
+            <span className="text-xs font-medium text-foreground">{t.name}</span>
+            <p className="text-[10px] text-muted-foreground">{t.description}</p>
+          </div>
+          {installed.has(t.name) ? (
+            <span className="text-[10px] text-emerald-400">Installed</span>
+          ) : (
+            <button onClick={async () => {
+              await fetch("/api/skills/install-template", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ templateIndex: i }) });
+              setSkills(await fetch("/api/skills").then(r => r.json()));
+              toast.success(`${t.name} installed`);
+            }} className="px-2 py-1 rounded bg-primary/10 text-primary text-[10px]">Install</button>
+          )}
+        </div>
+      ))}
+    </div>
+  );
+}
+
+/** Activity monitor status */
+function ActivityMonitorStatus() {
+  const [status, setStatus] = useState<any>(null);
+  useEffect(() => { fetch("/api/integrations/activity/status").then(r => r.json()).then(setStatus).catch(() => {}); }, []);
+
+  if (!status) return <p className="text-xs text-muted-foreground/40">Loading...</p>;
+
+  return (
+    <div className="space-y-2">
+      <div className="flex items-center gap-2">
+        <span className={`w-2 h-2 rounded-full ${status.monitoring ? "bg-emerald-400 animate-pulse" : "bg-muted-foreground/30"}`} />
+        <span className="text-xs text-foreground">{status.monitoring ? "Active" : "Not monitoring"}</span>
+        <span className="ml-auto text-[10px] text-muted-foreground">{status.capturesLast24h} captures today</span>
+      </div>
+      {status.totalScreenMinutes > 0 && (
+        <p className="text-xs text-muted-foreground">Screen time: {Math.round(status.totalScreenMinutes / 60)}h {status.totalScreenMinutes % 60}min</p>
+      )}
+      {status.topApps?.slice(0, 5).map((a: any) => (
+        <div key={a.app} className="flex items-center gap-2 text-xs">
+          <div className="w-12 h-1 rounded-full bg-white/5 overflow-hidden">
+            <div className="h-full rounded-full bg-primary" style={{ width: `${a.percentage}%` }} />
+          </div>
+          <span className="text-muted-foreground flex-1 truncate">{a.app}</span>
+          <span className="text-[10px] text-muted-foreground/40">{a.minutes}min</span>
+        </div>
+      ))}
+    </div>
+  );
+}
 
 export default function Settings() {
   const [activeSection, setActiveSection] = useState("profile");
@@ -329,6 +442,57 @@ export default function Settings() {
             )}
 
             {/* Privacy */}
+            {/* Automations: Crons + Skills + Telegram + Activity */}
+            {activeSection === "automations" && (
+              <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="space-y-6">
+
+                {/* Custom Crons */}
+                <div className="glass rounded-xl p-6">
+                  <h2 className="text-lg font-semibold mb-2">Automations</h2>
+                  <p className="text-xs text-muted-foreground mb-4">Scheduled tasks that run automatically.</p>
+                  <AutomationsList />
+                </div>
+
+                {/* Skill Templates */}
+                <div className="glass rounded-xl p-6">
+                  <h2 className="text-lg font-semibold mb-2">Skill Templates</h2>
+                  <p className="text-xs text-muted-foreground mb-4">Pre-built skills you can install with one click.</p>
+                  <SkillTemplates />
+                </div>
+
+                {/* Telegram */}
+                <div className="glass rounded-xl p-6">
+                  <h2 className="text-lg font-semibold mb-2">Telegram Channel</h2>
+                  <p className="text-xs text-muted-foreground mb-4">Talk to Anchor from Telegram — no browser needed.</p>
+                  {process.env.TELEGRAM_BOT_TOKEN ? (
+                    <div className="flex items-center gap-2">
+                      <Check className="h-4 w-4 text-emerald-400" />
+                      <span className="text-sm text-emerald-400">Connected</span>
+                    </div>
+                  ) : (
+                    <div className="space-y-2">
+                      <p className="text-xs text-muted-foreground">To connect:</p>
+                      <ol className="text-xs text-muted-foreground/60 space-y-1 list-decimal pl-4">
+                        <li>Open Telegram, search @BotFather</li>
+                        <li>Send /newbot, follow the steps</li>
+                        <li>Copy the bot token</li>
+                        <li>Add TELEGRAM_BOT_TOKEN=your_token to .env</li>
+                        <li>Restart Anchor</li>
+                      </ol>
+                    </div>
+                  )}
+                </div>
+
+                {/* Activity Monitor */}
+                <div className="glass rounded-xl p-6">
+                  <h2 className="text-lg font-semibold mb-2">Activity Monitor</h2>
+                  <p className="text-xs text-muted-foreground mb-4">Tracks what apps you use to understand your real priorities.</p>
+                  <ActivityMonitorStatus />
+                </div>
+
+              </motion.div>
+            )}
+
             {activeSection === "privacy" && (
               <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="space-y-6">
                 <div className="glass rounded-xl p-6">
