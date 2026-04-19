@@ -15,7 +15,7 @@ import { nanoid } from "nanoid";
 
 // ── Tool Definition (MCP-compatible schema) ─────────────────────────────────
 
-export type ToolHandler = "db" | "api" | "browser" | "code" | "internal";
+export type ToolHandler = "db" | "api" | "browser" | "code" | "internal" | "shell";
 
 export interface ToolDef {
   name: string;

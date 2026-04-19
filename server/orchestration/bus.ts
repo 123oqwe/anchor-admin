@@ -19,7 +19,8 @@ export type AnchorEvent =
   | { type: "EXECUTION_DONE"; payload: { steps_result: { step: string; status: string; result: string }[]; plan_summary: string } }
   | { type: "TWIN_UPDATED";  payload: { insight: string } }
   | { type: "GRAPH_UPDATED"; payload: { nodeId: string; status: string; label: string } }
-  | { type: "TASK_COMPLETED"; payload: { taskId: string; title: string } };
+  | { type: "TASK_COMPLETED"; payload: { taskId: string; title: string } }
+  | { type: "NOTIFICATION"; payload: { id: string; type: string; title: string; body: string; priority: string; action?: any } };
 
 class AnchorBus extends EventEmitter {
   publish(data: AnchorEvent) {

@@ -30,6 +30,8 @@ import adminRoutes from "./routes/admin.js";
 import skillsRoutes from "./routes/skills.js";
 import preferencesRoutes from "./routes/preferences.js";
 import integrationsRoutes from "./routes/integrations.js";
+import privacyRoutes from "./routes/privacy.js";
+import notificationsRoutes from "./routes/notifications.js";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -53,6 +55,8 @@ async function startServer() {
   app.use("/api/skills", skillsRoutes);
   app.use("/api/preferences", preferencesRoutes);
   app.use("/api/integrations", integrationsRoutes);
+  app.use("/api/privacy", privacyRoutes);
+  app.use("/api/notifications", notificationsRoutes);
 
   // ── Static / SPA ──────────────────────────────────────────────────────────
   const staticPath =
