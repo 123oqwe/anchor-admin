@@ -103,7 +103,28 @@ export async function runLocalScan(opts?: {
       await new Promise(r => setTimeout(r, 500));
     }
 
-    // ── Step 0.5: Extract people from browser history + WeChat ──
+    // ── Step 0.5a: Health inference from time patterns ──
+    // Create health nodes from screen time analysis — no LLM needed
+    try {
+      const msgs = db.prepare(
+        "SELECT created_at FROM agent_executions WHERE user_id=? ORDER BY created_at DESC LIMIT 100"
+      ).all(DEFAULT_USER_ID) as any[];
+
+      const browserVisits = browserEvents ?? [];
+      const lateNightCount = browserVisits.filter(e => {
+        try { return new Date(e.occurredAt).getHours() >= 23 || new Date(e.occurredAt).getHours() < 4; } catch { return false; }
+      }).length;
+
+      if (lateNightCount > 10) {
+        const existing = db.prepare("SELECT id FROM graph_nodes WHERE user_id=? AND domain='health' AND label LIKE '%Sleep%'").get(DEFAULT_USER_ID);
+        if (!existing) {
+          db.prepare("INSERT INTO graph_nodes (id, user_id, domain, label, type, status, captured, detail) VALUES (?,?,?,?,?,?,?,?)")
+            .run(nanoid(), DEFAULT_USER_ID, "health", "Sleep Deficit Risk", "risk", "active", "Inferred from browsing timestamps", `${lateNightCount} late-night browsing sessions detected (11pm-4am)`);
+        }
+      }
+    } catch {}
+
+    // ── Step 0.5b: Extract people from browser history + WeChat ──
     // Direct to DB — no LLM needed, just pattern matching
     const peopleResult = extractAndSavePeople();
     console.log(`[LocalScan] People: ${peopleResult.total} extracted from ${JSON.stringify(peopleResult.sources)}`);

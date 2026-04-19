@@ -87,6 +87,17 @@ router.post("/local/scan/people", async (_req, res) => {
   res.json(result);
 });
 
+// Cleanup junk nodes from old scans
+router.post("/local/cleanup", (_req, res) => {
+  const JUNK_TYPES = ["resource", "artifact", "observation", "external_context"];
+  let removed = 0;
+  for (const type of JUNK_TYPES) {
+    const result = db.prepare("DELETE FROM graph_nodes WHERE user_id=? AND type=?").run(DEFAULT_USER_ID, type);
+    removed += result.changes;
+  }
+  res.json({ ok: true, removed });
+});
+
 const GOOGLE_SCOPES = [
   "https://www.googleapis.com/auth/gmail.readonly",
   "https://www.googleapis.com/auth/calendar.readonly",

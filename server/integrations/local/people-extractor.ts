@@ -169,6 +169,52 @@ function extractPeopleFromWeChat(): ExtractedPerson[] {
   return people;
 }
 
+// ── Relationship categorization ─────────────────────────────────────────────
+
+function categorizeRelationship(source: string, name: string): { category: string; strength: number } {
+  switch (source) {
+    case "linkedin": return { category: "professional", strength: 0.5 };
+    case "twitter": return { category: "online", strength: 0.3 };
+    case "email": return { category: "communication", strength: 0.7 };
+    case "wechat": return { category: "personal", strength: 0.6 };
+    default: return { category: "contact", strength: 0.3 };
+  }
+}
+
+// ── Auto-infer edges between people and goals/projects ──────────────────────
+
+function inferEdges(personId: string, person: ExtractedPerson): void {
+  // Connect LinkedIn contacts to work goals
+  if (person.source === "linkedin") {
+    const workGoals = db.prepare(
+      "SELECT id, label FROM graph_nodes WHERE user_id=? AND domain='work' AND type IN ('goal','project') LIMIT 3"
+    ).all(DEFAULT_USER_ID) as any[];
+
+    for (const goal of workGoals) {
+      const edgeExists = db.prepare(
+        "SELECT id FROM graph_edges WHERE user_id=? AND from_node_id=? AND to_node_id=?"
+      ).get(DEFAULT_USER_ID, personId, goal.id);
+
+      if (!edgeExists) {
+        db.prepare("INSERT INTO graph_edges (id, user_id, from_node_id, to_node_id, type, weight) VALUES (?,?,?,?,?,?)")
+          .run(nanoid(), DEFAULT_USER_ID, personId, goal.id, "contextual", 0.3);
+      }
+    }
+  }
+
+  // Connect WeChat contacts to growth/personal domain
+  if (person.source === "wechat") {
+    const growthNodes = db.prepare(
+      "SELECT id FROM graph_nodes WHERE user_id=? AND domain='growth' AND type IN ('goal','value') LIMIT 1"
+    ).all(DEFAULT_USER_ID) as any[];
+
+    for (const node of growthNodes) {
+      db.prepare("INSERT INTO graph_edges (id, user_id, from_node_id, to_node_id, type, weight) VALUES (?,?,?,?,?,?)")
+        .run(nanoid(), DEFAULT_USER_ID, personId, (node as any).id, "contextual", 0.2);
+    }
+  }
+}
+
 // ── Write people directly to graph (no LLM needed) ──────────────────────────
 
 export function extractAndSavePeople(): { total: number; sources: Record<string, number> } {
@@ -183,16 +229,27 @@ export function extractAndSavePeople(): { total: number; sources: Record<string,
     sources[person.source] = (sources[person.source] ?? 0) + 1;
 
     // Check if person already exists in graph
+    const firstName = person.name.split(/[\s(]/)[0];
+    if (firstName.length < 2) continue;
+
     const existing = db.prepare(
       "SELECT id FROM graph_nodes WHERE user_id=? AND type='person' AND label LIKE ?"
-    ).get(DEFAULT_USER_ID, `%${person.name.split(" ")[0]}%`) as any;
+    ).get(DEFAULT_USER_ID, `%${firstName}%`) as any;
 
     if (existing) continue;
 
-    // Create person node directly — no LLM needed
+    // Categorize relationship
+    const { category, strength } = categorizeRelationship(person.source, person.name);
+    const detail = `${person.detail} | ${category} | strength: ${strength}`;
+
+    // Create person node
+    const personId = nanoid();
     db.prepare(
       "INSERT INTO graph_nodes (id, user_id, domain, label, type, status, captured, detail) VALUES (?,?,?,?,?,?,?,?)"
-    ).run(nanoid(), DEFAULT_USER_ID, person.domain, person.name, "person", "active", `Extracted from ${person.source}`, person.detail);
+    ).run(personId, DEFAULT_USER_ID, person.domain, person.name, "person", "active", `Extracted from ${person.source}`, detail);
+
+    // Auto-infer edges
+    inferEdges(personId, person);
 
     saved++;
   }
