@@ -257,24 +257,48 @@ export default function Dashboard() {
           </motion.div>
         )}
 
-        {/* ── Self-Portrait Narrative ─────────────────────────── */}
-        {portrait?.synthesizedNarrative && (
+        {/* ── Self-Portrait — 5 layer deep analysis ────────────── */}
+        {portrait?.layers && (
           <motion.div {...fade} transition={{ delay: 0.65, duration: 0.5 }} className="mt-10">
-            <h2 className="text-xs font-medium text-muted-foreground/60 tracking-widest uppercase mb-4">Your Mirror</h2>
-            <div className="glass rounded-xl p-6 border border-primary/10">
-              <Brain className="h-4 w-4 text-primary mb-3" />
-              <p className="text-sm text-muted-foreground leading-relaxed whitespace-pre-line">
-                {portrait.synthesizedNarrative}
-              </p>
-              <div className="mt-4 flex items-center gap-4">
-                <span className="text-[10px] text-muted-foreground/50 font-mono">
-                  Clarity: {portrait.overallClarity}/100
-                </span>
-                <button onClick={() => navigate("/advisor")} className="text-xs text-primary hover:text-primary/80 transition-colors">
+            <div className="flex items-center justify-between mb-4">
+              <h2 className="text-xs font-medium text-muted-foreground/60 tracking-widest uppercase">Self-Portrait</h2>
+              <span className="text-[10px] font-mono text-muted-foreground/40">Clarity {portrait.overallClarity}/100</span>
+            </div>
+
+            {/* 5-layer score bars */}
+            <div className="glass rounded-xl p-5 space-y-3 mb-4">
+              {portrait.layers.map((layer: any) => {
+                const color = layer.status === "healthy" ? "bg-emerald-400" : layer.status === "warning" ? "bg-amber-400" : "bg-red-400";
+                const textColor = layer.status === "healthy" ? "text-emerald-400" : layer.status === "warning" ? "text-amber-400" : "text-red-400";
+                return (
+                  <div key={layer.name}>
+                    <div className="flex items-center justify-between mb-1">
+                      <span className="text-xs text-muted-foreground">{layer.name}</span>
+                      <span className={`text-xs font-mono ${textColor}`}>{layer.score}</span>
+                    </div>
+                    <div className="h-1.5 rounded-full bg-white/5 overflow-hidden">
+                      <motion.div className={`h-full rounded-full ${color}`}
+                        initial={{ width: 0 }} animate={{ width: `${layer.score}%` }}
+                        transition={{ duration: 1, delay: 0.5 }} />
+                    </div>
+                    <p className="text-[10px] text-muted-foreground/60 mt-1 leading-snug">{layer.finding}</p>
+                  </div>
+                );
+              })}
+            </div>
+
+            {/* Narrative */}
+            {portrait.synthesizedNarrative && (
+              <div className="glass rounded-xl p-5 border border-primary/10">
+                <Brain className="h-3.5 w-3.5 text-primary mb-2" />
+                <p className="text-sm text-muted-foreground leading-relaxed whitespace-pre-line">
+                  {portrait.synthesizedNarrative}
+                </p>
+                <button onClick={() => navigate("/advisor")} className="mt-3 text-xs text-primary hover:text-primary/80 transition-colors">
                   Talk to Anchor about this →
                 </button>
               </div>
-            </div>
+            )}
           </motion.div>
         )}
 

@@ -26,6 +26,48 @@ const SCAN_PHASES = [
   { label: "Generating your first insight...", icon: Sparkles, duration: 2500 },
 ];
 
+/** Live counters that poll the DB every 3s during scanning */
+function ScanCounters() {
+  const [counts, setCounts] = useState({ total: 0, goals: 0, people: 0, values: 0 });
+
+  useEffect(() => {
+    const poll = setInterval(async () => {
+      try {
+        const graph = await fetch("/api/graph").then(r => r.json());
+        const nodes = graph.domains?.flatMap((d: any) => d.items ?? []) ?? [];
+        setCounts({
+          total: graph.totalNodes ?? 0,
+          goals: nodes.filter((n: any) => n.type === "goal" || n.type === "project").length,
+          people: nodes.filter((n: any) => n.type === "person").length,
+          values: nodes.filter((n: any) => n.type === "value" || n.type === "preference").length,
+        });
+      } catch {}
+    }, 3000);
+    return () => clearInterval(poll);
+  }, []);
+
+  return (
+    <div className="mt-6 grid grid-cols-2 gap-3 text-left">
+      <div className="glass rounded-lg p-3">
+        <motion.div key={counts.total} initial={{ scale: 1.2 }} animate={{ scale: 1 }} className="text-lg font-bold text-foreground">{counts.total}</motion.div>
+        <div className="text-[10px] text-muted-foreground">Graph nodes created</div>
+      </div>
+      <div className="glass rounded-lg p-3">
+        <motion.div key={counts.people} initial={{ scale: 1.2 }} animate={{ scale: 1 }} className="text-lg font-bold text-foreground">{counts.people}</motion.div>
+        <div className="text-[10px] text-muted-foreground">People discovered</div>
+      </div>
+      <div className="glass rounded-lg p-3">
+        <motion.div key={counts.goals} initial={{ scale: 1.2 }} animate={{ scale: 1 }} className="text-lg font-bold text-foreground">{counts.goals}</motion.div>
+        <div className="text-[10px] text-muted-foreground">Goals & projects</div>
+      </div>
+      <div className="glass rounded-lg p-3">
+        <motion.div key={counts.values} initial={{ scale: 1.2 }} animate={{ scale: 1 }} className="text-lg font-bold text-foreground">{counts.values}</motion.div>
+        <div className="text-[10px] text-muted-foreground">Values & preferences</div>
+      </div>
+    </div>
+  );
+}
+
 export default function Onboarding() {
   const [, navigate] = useLocation();
   const [step, setStep] = useState(0);
@@ -298,24 +340,7 @@ export default function Onboarding() {
                   </motion.div>
                 </AnimatePresence>
 
-                <div className="mt-6 grid grid-cols-2 gap-3 text-left">
-                  <div className="glass rounded-lg p-3">
-                    <div className="text-lg font-bold text-foreground">{goals.length + people.length + values.length + 2}</div>
-                    <div className="text-[10px] text-muted-foreground">Graph nodes created</div>
-                  </div>
-                  <div className="glass rounded-lg p-3">
-                    <div className="text-lg font-bold text-foreground">{goals.length}</div>
-                    <div className="text-[10px] text-muted-foreground">Goals tracked</div>
-                  </div>
-                  <div className="glass rounded-lg p-3">
-                    <div className="text-lg font-bold text-foreground">{people.length}</div>
-                    <div className="text-[10px] text-muted-foreground">Relationships mapped</div>
-                  </div>
-                  <div className="glass rounded-lg p-3">
-                    <div className="text-lg font-bold text-foreground">{values.length}</div>
-                    <div className="text-[10px] text-muted-foreground">Values defined</div>
-                  </div>
-                </div>
+                <ScanCounters />
               </div>
             </motion.div>
           )}
