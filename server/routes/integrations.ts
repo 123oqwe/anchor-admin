@@ -33,7 +33,7 @@ router.delete("/local/consent", (_req, res) => {
 router.post("/local/onboarding-scan", async (_req, res) => {
   grantConsent(DEFAULT_USER_ID);
   const status = getLocalScanStatus();
-  res.json({ started: true, permissions: status.permissions, browsers: status.availableBrowsers });
+  res.json({ started: true, browsers: status.availableBrowsers });
   runLocalScan().catch(err => console.error("[LocalScan] Onboarding scan error:", err.message));
 });
 

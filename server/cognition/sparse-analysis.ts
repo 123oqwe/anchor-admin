@@ -9,9 +9,9 @@
  * Instead: tags everything as fact / inference / hypothesis with confidence.
  */
 import { db, DEFAULT_USER_ID } from "../infra/storage/db.js";
-import { computePageRank } from "../L1-graph/math/pagerank.js";
-import { shannonEntropy, entropyToFocusScore } from "../L1-graph/math/entropy.js";
-import { relationshipHealth } from "../L1-graph/math/decay.js";
+import { computePageRank } from "../graph/math/pagerank.js";
+import { shannonEntropy, entropyToFocusScore } from "../graph/math/entropy.js";
+import { relationshipHealth } from "../graph/math/decay.js";
 import { text } from "../infra/compute/index.js";
 
 // ── Output types ───────────────────────────────────────────────────────────

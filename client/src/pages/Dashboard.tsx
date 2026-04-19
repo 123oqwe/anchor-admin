@@ -1,441 +1,220 @@
+/**
+ * Home — The Mirror.
+ *
+ * Not a dashboard. Not information overload. A mirror.
+ *
+ * What the user sees:
+ *   "What matters now" — one sentence
+ *   Current State — energy, focus, stress, momentum
+ *   Priority — the ONE thing to do, with why
+ *   Tension — the conflict holding you back
+ *   Action — one button that does the thing
+ *
+ * Design: Jobs-level minimal. Every pixel earns its place.
+ */
 import { useState, useEffect } from "react";
-import { motion, AnimatePresence } from "framer-motion";
+import { motion } from "framer-motion";
+import { useLocation } from "wouter";
 import {
-  Zap, Target, Activity, ArrowRight, Sparkles, AlertCircle,
-  Send, ChevronRight, ArrowLeft, Briefcase, Users, Heart,
-  GraduationCap, DollarSign, Clock, Plus, Minus, Loader2,
+  Zap, Target, Activity, ArrowRight, AlertCircle,
+  Users, Loader2, TrendingUp, Brain,
 } from "lucide-react";
-import { Badge } from "@/components/ui/badge";
 import { api } from "@/lib/api";
 
-const HERO_IMG = "https://d2xsxph8kpxj0f.cloudfront.net/310519663309741543/XAV3v9QesjBrkPBXbAU6Pq/anchor-hero-DjRHG9Uoj6QKRBdMyZK5DP.webp";
-
-const DOMAIN_ICONS: Record<string, any> = {
-  work: Briefcase, relationships: Users, finance: DollarSign,
-  growth: GraduationCap, health: Heart,
-};
-
-const typeColors: Record<string, string> = {
-  goal: "bg-blue-500/20 text-blue-400", person: "bg-purple-500/20 text-purple-400",
-  task: "bg-emerald-500/20 text-emerald-400", opportunity: "bg-amber-500/20 text-amber-400",
-  pattern: "bg-rose-500/20 text-rose-400",
-};
-
-const statusColors: Record<string, string> = {
-  active: "text-emerald-400", "in-progress": "text-blue-400", delayed: "text-red-400",
-  decaying: "text-amber-400", overdue: "text-red-400", opportunity: "text-blue-400",
-  stable: "text-emerald-400", worsening: "text-red-400", evolving: "text-blue-400",
-  declining: "text-amber-400", inactive: "text-muted-foreground", todo: "text-muted-foreground",
-  done: "text-emerald-400/50", blocked: "text-red-400",
-};
-
-function AgentStatus({ name, status, executions, errors }: { name: string; status: string; executions: number; errors: number }) {
-  return (
-    <div className="flex items-center gap-2 text-[10px]">
-      <div className={`w-1.5 h-1.5 rounded-full ${status === "running" ? "bg-blue-400 animate-pulse" : status === "success" ? "bg-emerald-400" : status === "error" ? "bg-red-400" : "bg-muted-foreground/30"}`} />
-      <span className="text-muted-foreground">{name}</span>
-      <div className="flex items-center gap-1 font-mono">
-        <Plus className="h-2 w-2 text-emerald-400" /><span className="text-emerald-400">{executions}</span>
-        <Minus className="h-2 w-2 text-red-400 ml-1" /><span className="text-red-400">{errors}</span>
-      </div>
-    </div>
-  );
-}
+const fade = { initial: { opacity: 0, y: 12 }, animate: { opacity: 1, y: 0 } };
 
 export default function Dashboard() {
-  const [quickInput, setQuickInput] = useState("");
-  const [stateValues, setStateValues] = useState<number[] | null>(null);
-  const [activeDomain, setActiveDomain] = useState<string | null>(null);
-  const [expandedItem, setExpandedItem] = useState<string | null>(null);
-  const [domains, setDomains] = useState<any[]>([]);
-  const [totalNodes, setTotalNodes] = useState(0);
-  const [todayDecision, setTodayDecision] = useState<any>(null);
-  const [agentStatus, setAgentStatus] = useState<any[]>([]);
+  const [, navigate] = useLocation();
   const [loading, setLoading] = useState(true);
+  const [decision, setDecision] = useState<any>(null);
+  const [state, setState] = useState<any>(null);
+  const [portrait, setPortrait] = useState<any>(null);
+  const [people, setPeople] = useState<any[]>([]);
 
-  const stateMetrics = [
-    { label: "Energy", icon: Zap, color: "var(--energy-color)" },
-    { label: "Focus", icon: Target, color: "var(--focus-color)" },
-    { label: "Stress", icon: Activity, color: "var(--stress-color)" },
-  ];
-
-  const [loadError, setLoadError] = useState<string | null>(null);
   useEffect(() => {
     Promise.all([
-      api.getGraph(),
-      api.getDecisionToday(),
-      api.getState(),
-      api.getAgentStatus(),
-    ]).then(([graph, decision, state, agents]) => {
-      setDomains(graph.domains);
-      setTotalNodes(graph.totalNodes);
-      setTodayDecision(decision);
-      setStateValues([state?.energy ?? 70, state?.focus ?? 70, state?.stress ?? 30]);
-      setAgentStatus(agents);
-    }).catch((err) => {
-      setLoadError(err.message ?? "Failed to load dashboard");
+      api.getDecisionToday().catch(() => null),
+      api.getState().catch(() => null),
+      fetch("/api/agents/self-portrait").then(r => r.ok ? r.json() : null).catch(() => null),
+      api.getGraph().catch(() => null),
+    ]).then(([dec, st, port, graph]) => {
+      setDecision(dec);
+      setState(st);
+      setPortrait(port);
+      // Extract people from graph
+      const personNodes = graph?.domains?.flatMap((d: any) => d.items?.filter((i: any) => i.type === "person") ?? []) ?? [];
+      setPeople(personNodes.slice(0, 3));
     }).finally(() => setLoading(false));
   }, []);
 
-  // Debounced state update — only fires API after 500ms of no changes
-  const stateTimerRef = { current: null as ReturnType<typeof setTimeout> | null };
-  const handleStateChange = (idx: number, val: number) => {
-    const next = [...(stateValues ?? [70, 70, 30])];
-    next[idx] = val;
-    setStateValues(next);
-    if (stateTimerRef.current) clearTimeout(stateTimerRef.current);
-    stateTimerRef.current = setTimeout(() => {
-      api.updateState({ energy: next[0], focus: next[1], stress: next[2] }).catch(() => {});
-    }, 500);
-  };
-
-  const [quickResponse, setQuickResponse] = useState<string | null>(null);
-  const [quickLoading, setQuickLoading] = useState(false);
-  const [digest, setDigest] = useState<any>(null);
-
-  useEffect(() => {
-    api.getDigest().then(setDigest).catch(() => {});
-  }, []);
-
-  const handleQuickSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!quickInput.trim() || quickLoading) return;
-    setQuickLoading(true);
-    setQuickResponse(null);
-    try {
-      const result = await api.sendUniversal(quickInput, "Dashboard");
-      setQuickResponse(result.content?.slice(0, 300) ?? "Done");
-      setQuickInput("");
-    } catch { setQuickResponse("Something went wrong."); }
-    finally { setQuickLoading(false); }
-  };
-
-  const selectedDomain = domains.find(d => d.id === activeDomain);
-
   if (loading) {
-    return <div className="min-h-screen flex items-center justify-center"><Loader2 className="h-6 w-6 animate-spin text-primary" /></div>;
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <Loader2 className="h-5 w-5 animate-spin text-primary/50" />
+      </div>
+    );
   }
+
+  // Extract key data
+  const energy = state?.energy ?? 70;
+  const focus = state?.focus ?? 70;
+  const stress = state?.stress ?? 30;
+  const momentum = Math.round((energy + focus - stress) / 2);
+
+  const priority = decision?.title ?? "Start building your graph";
+  const priorityReason = decision?.reason ?? "Tell Anchor about your goals and it will guide you.";
+  const priorityAction = decision?.action;
+
+  // Find the most critical tension from self-portrait
+  const tensions = portrait?.layers?.filter((l: any) => l.status === "critical" || l.status === "warning") ?? [];
+  const topTension = tensions[0];
+
+  // Open loops: overdue/blocked items
+  const openLoops = portrait?.blindSpots ?? [];
 
   return (
     <div className="min-h-screen dot-grid">
-      {/* Hero */}
-      <div className="relative overflow-hidden">
-        <div className="absolute inset-0 opacity-20"><img src={HERO_IMG} alt="" className="w-full h-full object-cover" /></div>
-        <div className="absolute inset-0 bg-gradient-to-b from-background/60 via-background/80 to-background" />
-        <div className="relative px-8 pt-8 pb-10">
-          <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.6 }}>
-            <div className="flex items-center justify-between">
-              <div>
-                <div className="flex items-center gap-2 mb-4">
-                  <Sparkles className="h-4 w-4 text-primary" />
-                  <span className="text-xs font-medium text-primary tracking-wider uppercase">Decision Surface</span>
-                  <span className="text-xs text-muted-foreground">— Today's Most Important Thing</span>
-                </div>
-                <h1 className="text-3xl md:text-4xl font-bold tracking-tight text-foreground mb-3 max-w-2xl">
-                  {todayDecision?.title ?? "Loading..."}
-                </h1>
-                <p className="text-base text-muted-foreground max-w-xl leading-relaxed mb-4">
-                  {todayDecision?.reason}
-                </p>
-                <div className="flex items-center gap-3">
-                  <Badge variant="outline" className="text-xs border-primary/30 text-primary bg-primary/5">
-                    <AlertCircle className="h-3 w-3 mr-1" />{todayDecision?.urgency === "high" ? "High Priority" : "On Track"}
-                  </Badge>
-                  {todayDecision?.action && (
-                    <motion.button
-                      initial={{ opacity: 0, x: -10 }}
-                      animate={{ opacity: 1, x: 0 }}
-                      transition={{ delay: 0.3 }}
-                      onClick={() => {
-                        const a = todayDecision.action;
-                        if (a.type === "navigate") window.location.href = a.payload.path;
-                        else if (a.type === "send_email") {
-                          fetch("/api/notifications/suggest-action", {
-                            method: "POST",
-                            headers: { "Content-Type": "application/json" },
-                            body: JSON.stringify({ personLabel: a.payload.personLabel, context: a.payload.context, actionType: "send_email" }),
-                          }).then(r => r.json()).then(draft => {
-                            window.location.href = `mailto:${draft.to}?subject=${encodeURIComponent(draft.subject)}&body=${encodeURIComponent(draft.body)}`;
-                          }).catch(() => window.location.href = "/advisor");
-                        }
-                      }}
-                      className="px-4 py-2 rounded-lg bg-primary text-primary-foreground text-sm font-medium hover:bg-primary/90 transition-all hover:scale-105"
-                    >
-                      <ArrowRight className="h-3 w-3 inline mr-1.5" />{todayDecision.action.label}
-                    </motion.button>
-                  )}
-                </div>
-              </div>
+      <div className="max-w-2xl mx-auto px-6 pt-12 pb-20">
 
-              <div className="hidden lg:block glass rounded-xl p-4 shrink-0 ml-8">
-                <h4 className="text-[10px] font-semibold text-muted-foreground tracking-wider uppercase mb-3">Active Agents</h4>
-                <div className="space-y-2">
-                  {agentStatus.slice(0, 4).map(a => (
-                    <AgentStatus key={a.name} name={a.name} status={a.successes > 0 ? "success" : "idle"} executions={a.successes} errors={a.failures ?? 0} />
-                  ))}
-                </div>
-              </div>
-            </div>
-          </motion.div>
-        </div>
-      </div>
+        {/* ── The Sentence ────────────────────────────────────── */}
+        <motion.div {...fade} transition={{ duration: 0.6 }}>
+          <p className="text-xs font-medium text-primary/60 tracking-widest uppercase mb-3">What matters now</p>
+          <h1 className="text-3xl md:text-4xl font-bold tracking-tight text-foreground leading-tight mb-3">
+            {priority}
+          </h1>
+          <p className="text-base text-muted-foreground leading-relaxed mb-6">
+            {priorityReason}
+          </p>
 
-      <div className="px-8 pb-8 space-y-6">
-        {/* State Projection */}
-        <motion.section initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.5, delay: 0.1 }}>
-          <h2 className="text-xs font-semibold text-muted-foreground tracking-wider uppercase mb-4">State Projection</h2>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            {stateMetrics.map((metric, i) => {
+          {/* Action button — the ONE thing to do */}
+          {priorityAction && (
+            <motion.button
+              initial={{ opacity: 0, scale: 0.95 }}
+              animate={{ opacity: 1, scale: 1 }}
+              transition={{ delay: 0.3 }}
+              onClick={() => {
+                if (priorityAction.type === "navigate") navigate(priorityAction.payload.path);
+                else if (priorityAction.type === "send_email") {
+                  fetch("/api/notifications/suggest-action", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ personLabel: priorityAction.payload.personLabel, context: priorityAction.payload.context, actionType: "send_email" }),
+                  }).then(r => r.json()).then(draft => {
+                    window.location.href = `mailto:${draft.to}?subject=${encodeURIComponent(draft.subject)}&body=${encodeURIComponent(draft.body)}`;
+                  }).catch(() => navigate("/advisor"));
+                }
+              }}
+              className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-primary text-primary-foreground text-sm font-semibold hover:bg-primary/90 transition-all hover:scale-[1.02] active:scale-[0.98]"
+            >
+              {priorityAction.label} <ArrowRight className="h-3.5 w-3.5" />
+            </motion.button>
+          )}
+        </motion.div>
+
+        {/* ── Current State ───────────────────────────────────── */}
+        <motion.div {...fade} transition={{ delay: 0.15, duration: 0.5 }} className="mt-14">
+          <h2 className="text-xs font-medium text-muted-foreground/60 tracking-widest uppercase mb-4">Current State</h2>
+          <div className="grid grid-cols-4 gap-3">
+            {[
+              { label: "Energy", value: energy, icon: Zap, color: "text-amber-400", bg: "bg-amber-400" },
+              { label: "Focus", value: focus, icon: Target, color: "text-blue-400", bg: "bg-blue-400" },
+              { label: "Stress", value: stress, icon: Activity, color: "text-rose-400", bg: "bg-rose-400" },
+              { label: "Momentum", value: momentum, icon: TrendingUp, color: "text-emerald-400", bg: "bg-emerald-400" },
+            ].map((metric) => {
               const Icon = metric.icon;
               return (
-                <div key={metric.label} className="glass rounded-xl p-5 group hover:bg-white/[0.07] transition-colors">
-                  <div className="flex items-center justify-between mb-4">
-                    <div className="flex items-center gap-2">
-                      <Icon className="h-4 w-4" style={{ color: metric.color }} />
-                      <span className="text-sm font-medium text-foreground">{metric.label}</span>
-                    </div>
-                    <span className="text-2xl font-bold font-mono" style={{ color: metric.color }}>{stateValues?.[i] ?? 0}</span>
+                <div key={metric.label} className="glass rounded-xl p-4">
+                  <div className="flex items-center gap-1.5 mb-2">
+                    <Icon className={`h-3 w-3 ${metric.color}`} />
+                    <span className="text-[10px] text-muted-foreground">{metric.label}</span>
                   </div>
-                  <div className="relative h-1.5 rounded-full bg-white/5 overflow-hidden">
-                    <motion.div className="absolute inset-y-0 left-0 rounded-full" style={{ backgroundColor: metric.color }}
-                      initial={{ width: 0 }} animate={{ width: `${stateValues?.[i] ?? 0}%` }} transition={{ duration: 1, delay: 0.2 + i * 0.1 }} />
+                  <div className={`text-2xl font-bold font-mono ${metric.color}`}>{metric.value}</div>
+                  <div className="mt-2 h-1 rounded-full bg-white/5 overflow-hidden">
+                    <motion.div
+                      className={`h-full rounded-full ${metric.bg}`}
+                      initial={{ width: 0 }}
+                      animate={{ width: `${metric.value}%` }}
+                      transition={{ duration: 1, delay: 0.3 }}
+                    />
                   </div>
-                  <input type="range" min={0} max={100} value={stateValues?.[i] ?? 0}
-                    onChange={e => handleStateChange(i, parseInt(e.target.value))}
-                    className="w-full mt-3 h-1 appearance-none bg-transparent cursor-pointer opacity-0 group-hover:opacity-100 transition-opacity [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:w-3 [&::-webkit-slider-thumb]:h-3 [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:bg-white [&::-webkit-slider-thumb]:shadow-md" />
                 </div>
               );
             })}
           </div>
-        </motion.section>
+        </motion.div>
 
-        {/* Quick Input */}
-        <motion.section initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.5, delay: 0.2 }}>
-          {/* Universal Input — talk to Anchor from Dashboard */}
-          <form onSubmit={handleQuickSubmit} className="relative">
-            <div className="glass rounded-xl overflow-hidden flex items-center group focus-within:border-primary/30 transition-colors">
-              <input type="text" value={quickInput} onChange={e => setQuickInput(e.target.value)}
-                placeholder="Talk to Anchor... ask anything, add a thought, or get a suggestion"
-                disabled={quickLoading}
-                className="flex-1 bg-transparent px-5 py-4 text-sm text-foreground placeholder:text-muted-foreground/60 focus:outline-none disabled:opacity-50" />
-              <button type="submit" disabled={quickLoading} className="px-5 py-4 text-muted-foreground hover:text-primary transition-colors disabled:opacity-30">
-                {quickLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
-              </button>
-            </div>
-          </form>
-          {quickResponse && (
-            <motion.div initial={{ opacity: 0, y: -5 }} animate={{ opacity: 1, y: 0 }}
-              className="glass rounded-xl p-4 mt-2">
-              <div className="flex items-start gap-2">
-                <Sparkles className="h-3.5 w-3.5 text-primary mt-0.5 shrink-0" />
-                <p className="text-sm text-foreground/80 leading-relaxed">{quickResponse}</p>
-              </div>
-              <button onClick={() => setQuickResponse(null)} className="text-[10px] text-muted-foreground mt-2 hover:text-foreground">dismiss</button>
-            </motion.div>
-          )}
-        </motion.section>
-
-        {/* While You Were Away — digest panel */}
-        {digest?.hasUpdates && (
-          <motion.section initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.25 }}>
-            <div className="glass rounded-xl p-5 border border-primary/10">
-              <div className="flex items-center gap-2 mb-3">
-                <Sparkles className="h-4 w-4 text-primary" />
-                <span className="text-xs font-semibold text-foreground">While you were away</span>
-                <span className="text-[10px] text-muted-foreground ml-auto">{digest.agentActivity} agent actions</span>
-              </div>
-
-              {digest.urgentItems?.length > 0 && (
-                <div className="mb-3">
-                  <span className="text-[9px] text-red-400 uppercase tracking-wider">Needs attention</span>
-                  {digest.urgentItems.map((item: any, i: number) => (
-                    <div key={i} className="flex items-center gap-2 mt-1">
-                      <AlertCircle className="h-3 w-3 text-red-400 shrink-0" />
-                      <span className="text-xs text-foreground">{item.label}</span>
-                      <Badge className="text-[8px] bg-red-500/10 text-red-400">{item.status}</Badge>
-                    </div>
-                  ))}
-                </div>
-              )}
-
-              {digest.newInsights?.length > 0 && (
-                <div className="mb-3">
-                  <span className="text-[9px] text-purple-400 uppercase tracking-wider">New insights</span>
-                  {digest.newInsights.map((ins: any, i: number) => (
-                    <p key={i} className="text-[11px] text-foreground/70 mt-1">
-                      <span className="text-purple-400">{ins.category}:</span> {ins.insight.slice(0, 80)}
-                    </p>
-                  ))}
-                </div>
-              )}
-
-              {digest.recentActions?.length > 0 && (
+        {/* ── Key Tension ─────────────────────────────────────── */}
+        {topTension && (
+          <motion.div {...fade} transition={{ delay: 0.3, duration: 0.5 }} className="mt-10">
+            <h2 className="text-xs font-medium text-muted-foreground/60 tracking-widest uppercase mb-4">Key Tension</h2>
+            <div className="glass rounded-xl p-5 border-l-2 border-amber-400/50">
+              <div className="flex items-start gap-3">
+                <AlertCircle className="h-4 w-4 text-amber-400 mt-0.5 shrink-0" />
                 <div>
-                  <span className="text-[9px] text-muted-foreground uppercase tracking-wider">Recent actions</span>
-                  {digest.recentActions.slice(0, 3).map((a: any, i: number) => (
-                    <div key={i} className="flex items-center gap-2 mt-1 text-[10px] text-muted-foreground">
-                      <div className={`w-1 h-1 rounded-full ${a.status === "success" ? "bg-emerald-400" : "bg-red-400"}`} />
-                      <span>{a.agent}: {a.action}</span>
-                    </div>
-                  ))}
+                  <p className="text-sm font-medium text-foreground mb-1">{topTension.name} — {topTension.score}/100</p>
+                  <p className="text-sm text-muted-foreground leading-relaxed">{topTension.insight}</p>
                 </div>
-              )}
+              </div>
             </div>
-          </motion.section>
+          </motion.div>
         )}
 
-        {/* Human Graph */}
-        <motion.section initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.5, delay: 0.3 }}>
-          <div className="flex items-center justify-between mb-4">
-            <h2 className="text-xs font-semibold text-muted-foreground tracking-wider uppercase">Human Graph</h2>
-            <span className="text-xs text-muted-foreground font-mono">{totalNodes} nodes across {domains.length} domains</span>
-          </div>
-
-          <AnimatePresence mode="wait">
-            {!activeDomain ? (
-              <motion.div key="overview" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                {domains.map((domain, i) => {
-                  const Icon = DOMAIN_ICONS[domain.id] ?? Briefcase;
-                  return (
-                    <motion.div key={domain.id} initial={{ opacity: 0, y: 15 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.4, delay: i * 0.05 }}
-                      onClick={() => setActiveDomain(domain.id)}
-                      className="glass rounded-xl p-5 cursor-pointer hover:bg-white/[0.07] transition-all group relative overflow-hidden"
-                      style={{ borderWidth: "1px", borderColor: "transparent" }} whileHover={{ borderColor: "rgba(255,255,255,0.1)" }}>
-                      <div className={`absolute -top-10 -right-10 w-32 h-32 rounded-full ${domain.bgColor} opacity-30 blur-2xl group-hover:opacity-50 transition-opacity`} />
-                      <div className="relative">
-                        <div className="flex items-start justify-between mb-3">
-                          <div className="flex items-center gap-3">
-                            <div className={`w-10 h-10 rounded-lg ${domain.bgColor} flex items-center justify-center`}>
-                              <Icon className={`h-5 w-5 ${domain.color}`} />
-                            </div>
-                            <div>
-                              <h3 className="text-sm font-semibold text-foreground">{domain.name}</h3>
-                              <span className="text-[10px] text-muted-foreground">{domain.nodeCount} nodes</span>
-                            </div>
-                          </div>
-                          <ChevronRight className="h-4 w-4 text-muted-foreground opacity-0 group-hover:opacity-100 transition-opacity" />
-                        </div>
-                        <div className="flex items-center gap-2 mb-3">
-                          <span className="text-[10px] text-muted-foreground">Health</span>
-                          <div className="flex-1 h-1 rounded-full bg-white/5 overflow-hidden">
-                            <motion.div className="h-full rounded-full"
-                              style={{ backgroundColor: domain.health > 70 ? "#34d399" : domain.health > 40 ? "#fbbf24" : "#f87171" }}
-                              initial={{ width: 0 }} animate={{ width: `${domain.health}%` }} transition={{ duration: 1, delay: 0.3 + i * 0.1 }} />
-                          </div>
-                          <span className="text-[10px] font-mono text-muted-foreground">{domain.health}%</span>
-                        </div>
-                        <div className="space-y-1">
-                          {domain.items.slice(0, 2).map((item: any) => (
-                            <div key={item.id} className="flex items-center gap-2 text-[10px] text-muted-foreground">
-                              <div className={`w-1 h-1 rounded-full ${(statusColors[item.status] ?? "").replace("text-", "bg-") || "bg-muted-foreground"}`} />
-                              <span className="truncate">{item.label}</span>
-                              <span className={`${statusColors[item.status] || ""} ml-auto shrink-0`}>{item.status}</span>
-                            </div>
-                          ))}
-                          {domain.items.length > 2 && <span className="text-[10px] text-muted-foreground/50">+{domain.items.length - 2} more</span>}
-                        </div>
-                      </div>
-                    </motion.div>
-                  );
-                })}
-              </motion.div>
-            ) : (
-              <motion.div key="detail" initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -20 }} transition={{ duration: 0.3 }}>
-                <button onClick={() => { setActiveDomain(null); setExpandedItem(null); }} className="flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground mb-4 transition-colors">
-                  <ArrowLeft className="h-3 w-3" />Back to all domains
-                </button>
-                {selectedDomain && (
-                  <div className="glass rounded-xl overflow-hidden">
-                    <div className="p-5 border-b border-border/50">
-                      <div className="flex items-center gap-3">
-                        {(() => { const Icon = DOMAIN_ICONS[selectedDomain.id] ?? Briefcase; return (
-                          <div className={`w-10 h-10 rounded-lg ${selectedDomain.bgColor} flex items-center justify-center`}>
-                            <Icon className={`h-5 w-5 ${selectedDomain.color}`} />
-                          </div>
-                        ); })()}
-                        <div>
-                          <h3 className="text-lg font-bold text-foreground">{selectedDomain.name}</h3>
-                          <div className="flex items-center gap-3 text-xs text-muted-foreground mt-0.5">
-                            <span>{selectedDomain.nodeCount} nodes</span>
-                            <span>Health: {selectedDomain.health}%</span>
-                          </div>
-                        </div>
-                      </div>
-                    </div>
-                    <div className="p-3 space-y-1">
-                      {selectedDomain.items.map((item: any, i: number) => (
-                        <motion.div key={item.id} initial={{ opacity: 0, x: -10 }} animate={{ opacity: 1, x: 0 }} transition={{ duration: 0.3, delay: i * 0.05 }}>
-                          <div onClick={() => setExpandedItem(expandedItem === item.id ? null : item.id)}
-                            className="flex items-center gap-3 p-3 rounded-lg hover:bg-white/[0.05] transition-colors cursor-pointer group">
-                            <Badge className={`text-[9px] font-mono shrink-0 ${typeColors[item.type] || ""}`}>{item.type}</Badge>
-                            <span className="text-sm font-medium text-foreground flex-1">{item.label}</span>
-                            <span className={`text-[10px] font-mono ${statusColors[item.status] || "text-muted-foreground"}`}>{item.status}</span>
-                            <motion.div animate={{ rotate: expandedItem === item.id ? 90 : 0 }} transition={{ duration: 0.15 }}>
-                              <ChevronRight className="h-3 w-3 text-muted-foreground" />
-                            </motion.div>
-                          </div>
-                          <AnimatePresence>
-                            {expandedItem === item.id && (
-                              <motion.div initial={{ height: 0, opacity: 0 }} animate={{ height: "auto", opacity: 1 }} exit={{ height: 0, opacity: 0 }} transition={{ duration: 0.2 }} className="overflow-hidden">
-                                <div className="px-3 pb-3 ml-16">
-                                  <p className="text-xs text-muted-foreground leading-relaxed mb-2">{item.detail}</p>
-                                  <div className="flex items-center gap-2 text-[10px] text-muted-foreground/60">
-                                    <Clock className="h-3 w-3" /><span>Captured: {item.captured}</span>
-                                  </div>
-                                </div>
-                              </motion.div>
-                            )}
-                          </AnimatePresence>
-                        </motion.div>
-                      ))}
-                    </div>
+        {/* ── Important People ────────────────────────────────── */}
+        {people.length > 0 && (
+          <motion.div {...fade} transition={{ delay: 0.45, duration: 0.5 }} className="mt-10">
+            <h2 className="text-xs font-medium text-muted-foreground/60 tracking-widest uppercase mb-4">Key People</h2>
+            <div className="flex gap-3">
+              {people.map((p: any) => (
+                <div key={p.id ?? p.label} className="glass rounded-xl px-4 py-3 flex-1">
+                  <div className="flex items-center gap-2 mb-1">
+                    <Users className="h-3 w-3 text-purple-400" />
+                    <span className="text-sm font-medium text-foreground truncate">{p.label}</span>
                   </div>
-                )}
-              </motion.div>
-            )}
-          </AnimatePresence>
-        </motion.section>
-
-        {/* Activity Feed */}
-        <motion.section initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.4 }}>
-          <div className="glass rounded-2xl p-5">
-            <div className="flex items-center gap-2 mb-3">
-              <Activity className="h-4 w-4 text-primary" />
-              <span className="text-xs font-semibold text-foreground tracking-wide">Recent Activity</span>
+                  <span className={`text-[10px] ${p.status === "decaying" ? "text-amber-400" : "text-muted-foreground"}`}>
+                    {p.status}
+                  </span>
+                </div>
+              ))}
             </div>
-            <ActivityFeed />
-          </div>
-        </motion.section>
+          </motion.div>
+        )}
+
+        {/* ── Blind Spots ─────────────────────────────────────── */}
+        {openLoops.length > 0 && (
+          <motion.div {...fade} transition={{ delay: 0.55, duration: 0.5 }} className="mt-10">
+            <h2 className="text-xs font-medium text-muted-foreground/60 tracking-widest uppercase mb-4">Blind Spots</h2>
+            <div className="flex flex-wrap gap-2">
+              {openLoops.map((loop: string, i: number) => (
+                <span key={i} className="glass rounded-lg px-3 py-1.5 text-xs text-amber-400/80">
+                  {loop}
+                </span>
+              ))}
+            </div>
+          </motion.div>
+        )}
+
+        {/* ── Self-Portrait Narrative ─────────────────────────── */}
+        {portrait?.synthesizedNarrative && (
+          <motion.div {...fade} transition={{ delay: 0.65, duration: 0.5 }} className="mt-10">
+            <h2 className="text-xs font-medium text-muted-foreground/60 tracking-widest uppercase mb-4">Your Mirror</h2>
+            <div className="glass rounded-xl p-6 border border-primary/10">
+              <Brain className="h-4 w-4 text-primary mb-3" />
+              <p className="text-sm text-muted-foreground leading-relaxed whitespace-pre-line">
+                {portrait.synthesizedNarrative}
+              </p>
+              <div className="mt-4 flex items-center gap-4">
+                <span className="text-[10px] text-muted-foreground/50 font-mono">
+                  Clarity: {portrait.overallClarity}/100
+                </span>
+                <button onClick={() => navigate("/advisor")} className="text-xs text-primary hover:text-primary/80 transition-colors">
+                  Talk to Anchor about this →
+                </button>
+              </div>
+            </div>
+          </motion.div>
+        )}
+
       </div>
-    </div>
-  );
-}
-
-function ActivityFeed() {
-  const [events, setEvents] = useState<any[]>([]);
-
-  useEffect(() => {
-    api.getExecutions().then(rows => setEvents(rows.slice(0, 8))).catch(() => {});
-    const interval = setInterval(() => {
-      api.getExecutions().then(rows => setEvents(rows.slice(0, 8))).catch(() => {});
-    }, 10000);
-    return () => clearInterval(interval);
-  }, []);
-
-  if (events.length === 0) return <p className="text-xs text-muted-foreground">No activity yet</p>;
-
-  return (
-    <div className="space-y-1.5">
-      {events.map((e: any) => (
-        <div key={e.id} className="flex items-center gap-3 py-1.5">
-          <div className={`w-1.5 h-1.5 rounded-full shrink-0 ${e.status === "success" ? "bg-emerald-400" : "bg-red-400"}`} />
-          <span className="text-[10px] text-muted-foreground font-mono w-16 shrink-0">
-            {new Date(e.created_at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
-          </span>
-          <Badge className="text-[8px] bg-white/5 text-muted-foreground shrink-0">{e.agent}</Badge>
-          <span className="text-[11px] text-foreground/70 truncate flex-1">{e.action}</span>
-        </div>
-      ))}
     </div>
   );
 }
