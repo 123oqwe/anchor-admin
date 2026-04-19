@@ -66,23 +66,23 @@ router.post("/local/scan/calendar", async (_req, res) => {
 
 // ── Finance tracking (manual input → runway calculation) ────────────────────
 
-router.get("/finance", (_req, res) => {
-  const { getFinanceSnapshot } = require("../integrations/local/finance.js");
+router.get("/finance", async (_req, res) => {
+  const { getFinanceSnapshot } = await import("../integrations/local/finance.js");
   res.json(getFinanceSnapshot() ?? { balance: 0, monthlyBurn: 0, monthlyIncome: 0, runway: 0, categories: [], trend: [], risks: [] });
 });
 
-router.post("/finance", (req, res) => {
+router.post("/finance", async (req, res) => {
   const { balance, monthlyBurn, monthlyIncome, categories } = req.body;
   if (balance == null || monthlyBurn == null) return res.status(400).json({ error: "balance and monthlyBurn required" });
-  const { saveFinanceSnapshot } = require("../integrations/local/finance.js");
+  const { saveFinanceSnapshot } = await import("../integrations/local/finance.js");
   const snapshot = saveFinanceSnapshot({ balance, monthlyBurn, monthlyIncome, categories });
   res.json(snapshot);
 });
 
-router.post("/finance/expense", (req, res) => {
+router.post("/finance/expense", async (req, res) => {
   const { category, amount, note } = req.body;
   if (!category || !amount) return res.status(400).json({ error: "category and amount required" });
-  const { addExpense } = require("../integrations/local/finance.js");
+  const { addExpense } = await import("../integrations/local/finance.js");
   addExpense({ category, amount, note });
   res.json({ ok: true });
 });
@@ -90,7 +90,7 @@ router.post("/finance/expense", (req, res) => {
 // ── People extraction (direct, no LLM) ─────────────────────────────────────
 
 router.post("/local/scan/people", async (_req, res) => {
-  const { extractAndSavePeople } = require("../integrations/local/people-extractor.js");
+  const { extractAndSavePeople } = await import("../integrations/local/people-extractor.js");
   const result = extractAndSavePeople();
   res.json(result);
 });
@@ -108,14 +108,14 @@ router.post("/local/cleanup", (_req, res) => {
 
 // ── Activity monitoring ─────────────────────────────────────────────────────
 
-router.get("/activity/status", (_req, res) => {
-  const { getActivityStatus } = require("../integrations/local/activity-monitor.js");
+router.get("/activity/status", async (_req, res) => {
+  const { getActivityStatus } = await import("../integrations/local/activity-monitor.js");
   res.json(getActivityStatus());
 });
 
-router.get("/activity/time", (req, res) => {
+router.get("/activity/time", async (req, res) => {
   const hours = parseInt(req.query.hours as string) || 24;
-  const { getTimeByApp, getTimeByProject, getPersonActivity } = require("../integrations/local/activity-monitor.js");
+  const { getTimeByApp, getTimeByProject, getPersonActivity } = await import("../integrations/local/activity-monitor.js");
   res.json({
     byApp: getTimeByApp(hours),
     byProject: getTimeByProject(hours),
