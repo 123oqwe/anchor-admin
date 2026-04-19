@@ -64,6 +64,29 @@ router.post("/local/scan/calendar", async (_req, res) => {
   runLocalScan({ browser: false, contacts: false, calendar: true }).catch(() => {});
 });
 
+// ── Finance tracking (manual input → runway calculation) ────────────────────
+
+router.get("/finance", (_req, res) => {
+  const { getFinanceSnapshot } = require("../integrations/local/finance.js");
+  res.json(getFinanceSnapshot() ?? { balance: 0, monthlyBurn: 0, monthlyIncome: 0, runway: 0 });
+});
+
+router.post("/finance", (req, res) => {
+  const { balance, monthlyBurn, monthlyIncome } = req.body;
+  if (balance == null || monthlyBurn == null) return res.status(400).json({ error: "balance and monthlyBurn required" });
+  const { saveFinanceSnapshot } = require("../integrations/local/finance.js");
+  const snapshot = saveFinanceSnapshot({ balance, monthlyBurn, monthlyIncome });
+  res.json(snapshot);
+});
+
+// ── People extraction (direct, no LLM) ─────────────────────────────────────
+
+router.post("/local/scan/people", async (_req, res) => {
+  const { extractAndSavePeople } = require("../integrations/local/people-extractor.js");
+  const result = extractAndSavePeople();
+  res.json(result);
+});
+
 const GOOGLE_SCOPES = [
   "https://www.googleapis.com/auth/gmail.readonly",
   "https://www.googleapis.com/auth/calendar.readonly",

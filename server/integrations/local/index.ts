@@ -10,6 +10,7 @@ import { scanBrowserHistory, getAvailableBrowsers } from "./browser-history.js";
 import { scanContacts } from "./contacts.js";
 import { scanCalendar } from "./calendar.js";
 import { deepScanMac, profileToText } from "./deep-scan.js";
+import { extractAndSavePeople } from "./people-extractor.js";
 import { extractFromText } from "../../cognition/extractor.js";
 import type { IngestionEvent } from "../types.js";
 
@@ -101,6 +102,11 @@ export async function runLocalScan(opts?: {
       await extractFromText(profileText);
       await new Promise(r => setTimeout(r, 500));
     }
+
+    // ── Step 0.5: Extract people from browser history + WeChat ──
+    // Direct to DB — no LLM needed, just pattern matching
+    const peopleResult = extractAndSavePeople();
+    console.log(`[LocalScan] People: ${peopleResult.total} extracted from ${JSON.stringify(peopleResult.sources)}`);
 
     // ── Step 1: Gather events from all sources ──
     if (browser) browserEvents = scanBrowserHistory(sinceDaysAgo);
