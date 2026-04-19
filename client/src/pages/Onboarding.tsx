@@ -16,7 +16,7 @@ import {
 import { Progress } from "@/components/ui/progress";
 import { api } from "@/lib/api";
 
-const STEPS = ["Welcome", "About You", "Your Goals", "Key People", "Preferences", "Scanning", "Your Insight"];
+const STEPS = ["Welcome", "Scan Your Mac", "About You", "Your Goals", "Key People", "Preferences", "Scanning", "Your Insight"];
 
 const SCAN_PHASES = [
   { label: "Building your Human Graph...", icon: Brain, duration: 2000 },
@@ -58,7 +58,7 @@ export default function Onboarding() {
   // Save data + start scan
   const startScan = async () => {
     setSaving(true);
-    setStep(5); // go to scanning step
+    setStep(6); // go to scanning step
 
     try {
       // Save all data to backend
@@ -96,7 +96,7 @@ export default function Onboarding() {
         setInsightConfidence(0.8);
       }
 
-      setStep(6); // show insight
+      setStep(7); // show insight
     } catch {
       setSaving(false);
     }
@@ -114,15 +114,15 @@ export default function Onboarding() {
           <div>
             <h1 className="text-xl font-bold text-foreground">Anchor</h1>
             <p className="text-xs text-muted-foreground">
-              {step <= 4 ? `Step ${step + 1} of 5: ${STEPS[step]}` : step === 5 ? "Analyzing your world..." : "Ready"}
+              {step <= 5 ? `Step ${step + 1} of 6: ${STEPS[step]}` : step === 6 ? "Analyzing your world..." : "Ready"}
             </p>
           </div>
         </div>
 
         {/* Progress bar */}
         <div className="flex gap-1 mb-8">
-          {[0,1,2,3,4].map(i => (
-            <div key={i} className={`flex-1 h-1 rounded-full transition-all duration-300 ${i <= Math.min(step, 4) ? "bg-primary" : "bg-white/10"}`} />
+          {[0,1,2,3,4,5].map(i => (
+            <div key={i} className={`flex-1 h-1 rounded-full transition-all duration-300 ${i <= Math.min(step, 5) ? "bg-primary" : "bg-white/10"}`} />
           ))}
         </div>
 
@@ -144,8 +144,53 @@ export default function Onboarding() {
             </motion.div>
           )}
 
-          {/* Step 1: Identity */}
+          {/* Step 1: Scan Your Mac — zero-friction data import */}
           {step === 1 && (
+            <motion.div key="scan" initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -20 }} className="space-y-6">
+              <div className="glass rounded-xl p-8 text-center">
+                <Scan className="h-12 w-12 text-primary mx-auto mb-4" />
+                <h2 className="text-2xl font-bold mb-2">Let me learn about you</h2>
+                <p className="text-muted-foreground mb-6">
+                  I'll read your browser history, contacts, and calendar — all locally, nothing leaves your machine. This takes about 30 seconds.
+                </p>
+                <div className="flex flex-col items-center gap-3">
+                  {!saving ? (
+                    <>
+                      <button
+                        onClick={async () => {
+                          setSaving(true);
+                          try {
+                            await fetch("/api/integrations/local/onboarding-scan", { method: "POST" });
+                            // Wait for scan to process
+                            await new Promise(r => setTimeout(r, 8000));
+                          } catch {}
+                          setSaving(false);
+                          setStep(2);
+                        }}
+                        className="px-8 py-3 rounded-xl bg-primary text-primary-foreground text-sm font-semibold hover:bg-primary/90 transition-all hover:scale-105"
+                      >
+                        Allow — Scan My Data
+                      </button>
+                      <button onClick={() => setStep(2)} className="text-xs text-muted-foreground hover:text-foreground transition-colors">
+                        Skip for now
+                      </button>
+                    </>
+                  ) : (
+                    <div className="space-y-3">
+                      <Loader2 className="h-6 w-6 animate-spin text-primary mx-auto" />
+                      <p className="text-sm text-primary animate-pulse">Scanning your world...</p>
+                    </div>
+                  )}
+                </div>
+                <p className="text-[10px] text-muted-foreground mt-4">
+                  Reads: URL titles, contact names, event titles. Does NOT read: passwords, email content, banking sites.
+                </p>
+              </div>
+            </motion.div>
+          )}
+
+          {/* Step 2: Identity */}
+          {step === 2 && (
             <motion.div key="identity" initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -20 }} className="space-y-4">
               <div className="flex items-center gap-2 mb-2"><User className="h-4 w-4 text-primary" /><span className="text-sm font-medium">About You</span></div>
               <input value={name} onChange={e => setName(e.target.value)} placeholder="Your name" className="w-full glass rounded-lg px-4 py-3 text-sm text-foreground placeholder:text-muted-foreground/50 focus:outline-none" />
@@ -153,8 +198,8 @@ export default function Onboarding() {
             </motion.div>
           )}
 
-          {/* Step 2: Goals */}
-          {step === 2 && (
+          {/* Step 3: Goals */}
+          {step === 3 && (
             <motion.div key="goals" initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -20 }} className="space-y-4">
               <div className="flex items-center gap-2 mb-2"><Target className="h-4 w-4 text-primary" /><span className="text-sm font-medium">What are you working toward?</span></div>
               <div className="flex gap-2">
@@ -175,8 +220,8 @@ export default function Onboarding() {
             </motion.div>
           )}
 
-          {/* Step 3: People */}
-          {step === 3 && (
+          {/* Step 4: People */}
+          {step === 4 && (
             <motion.div key="people" initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -20 }} className="space-y-4">
               <div className="flex items-center gap-2 mb-2"><Users className="h-4 w-4 text-primary" /><span className="text-sm font-medium">Key people in your life</span></div>
               <div className="flex gap-2">
@@ -194,8 +239,8 @@ export default function Onboarding() {
             </motion.div>
           )}
 
-          {/* Step 4: Preferences */}
-          {step === 4 && (
+          {/* Step 5: Preferences */}
+          {step === 5 && (
             <motion.div key="prefs" initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -20 }} className="space-y-4">
               <div className="flex items-center gap-2 mb-2"><Zap className="h-4 w-4 text-primary" /><span className="text-sm font-medium">How do you operate?</span></div>
               <div>
@@ -232,8 +277,8 @@ export default function Onboarding() {
             </motion.div>
           )}
 
-          {/* Step 5: SCANNING — the magic bridge */}
-          {step === 5 && (
+          {/* Step 6: SCANNING — the magic bridge */}
+          {step === 6 && (
             <motion.div key="scanning" initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="space-y-6">
               <div className="glass rounded-xl p-8 text-center">
                 <motion.div animate={{ rotate: 360 }} transition={{ duration: 2, repeat: Infinity, ease: "linear" }} className="inline-block mb-4">
@@ -272,8 +317,8 @@ export default function Onboarding() {
             </motion.div>
           )}
 
-          {/* Step 6: FIRST INSIGHT — the "wow" moment */}
-          {step === 6 && firstInsight && (
+          {/* Step 7: FIRST INSIGHT — the "wow" moment */}
+          {step === 7 && firstInsight && (
             <motion.div key="insight" initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} className="space-y-6">
               <div className="glass rounded-xl p-8 border border-primary/20">
                 <div className="flex items-center gap-2 mb-4">
@@ -295,16 +340,20 @@ export default function Onboarding() {
           )}
         </AnimatePresence>
 
-        {/* Navigation (steps 0-4 only) */}
-        {step <= 4 && (
+        {/* Navigation — steps 0 and 2-5 (step 1 has its own buttons, steps 6-7 are auto) */}
+        {(step === 0 || (step >= 2 && step <= 5)) && (
           <div className="flex justify-between mt-8">
             {step > 0 ? (
-              <button onClick={() => setStep(step - 1)} className="flex items-center gap-1.5 glass rounded-lg px-4 py-2.5 text-sm text-muted-foreground hover:text-foreground">
+              <button onClick={() => setStep(step === 2 ? 0 : step - 1)} className="flex items-center gap-1.5 glass rounded-lg px-4 py-2.5 text-sm text-muted-foreground hover:text-foreground">
                 <ArrowLeft className="h-3.5 w-3.5" /> Back
               </button>
             ) : <div />}
 
-            {step < 4 ? (
+            {step === 0 ? (
+              <button onClick={() => setStep(1)} className="flex items-center gap-1.5 bg-primary/20 text-primary rounded-lg px-5 py-2.5 text-sm font-medium hover:bg-primary/30">
+                Get Started <ArrowRight className="h-3.5 w-3.5" />
+              </button>
+            ) : step < 5 ? (
               <button onClick={() => setStep(step + 1)} className="flex items-center gap-1.5 bg-primary/20 text-primary rounded-lg px-5 py-2.5 text-sm font-medium hover:bg-primary/30">
                 Next <ArrowRight className="h-3.5 w-3.5" />
               </button>

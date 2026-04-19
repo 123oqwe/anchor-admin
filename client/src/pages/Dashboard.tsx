@@ -141,7 +141,29 @@ export default function Dashboard() {
                   <Badge variant="outline" className="text-xs border-primary/30 text-primary bg-primary/5">
                     <AlertCircle className="h-3 w-3 mr-1" />{todayDecision?.urgency === "high" ? "High Priority" : "On Track"}
                   </Badge>
-                  <span className="text-xs text-muted-foreground font-mono">{todayDecision?.source}</span>
+                  {todayDecision?.action && (
+                    <motion.button
+                      initial={{ opacity: 0, x: -10 }}
+                      animate={{ opacity: 1, x: 0 }}
+                      transition={{ delay: 0.3 }}
+                      onClick={() => {
+                        const a = todayDecision.action;
+                        if (a.type === "navigate") window.location.href = a.payload.path;
+                        else if (a.type === "send_email") {
+                          fetch("/api/notifications/suggest-action", {
+                            method: "POST",
+                            headers: { "Content-Type": "application/json" },
+                            body: JSON.stringify({ personLabel: a.payload.personLabel, context: a.payload.context, actionType: "send_email" }),
+                          }).then(r => r.json()).then(draft => {
+                            window.location.href = `mailto:${draft.to}?subject=${encodeURIComponent(draft.subject)}&body=${encodeURIComponent(draft.body)}`;
+                          }).catch(() => window.location.href = "/advisor");
+                        }
+                      }}
+                      className="px-4 py-2 rounded-lg bg-primary text-primary-foreground text-sm font-medium hover:bg-primary/90 transition-all hover:scale-105"
+                    >
+                      <ArrowRight className="h-3 w-3 inline mr-1.5" />{todayDecision.action.label}
+                    </motion.button>
+                  )}
                 </div>
               </div>
 

@@ -1,37 +1,23 @@
 /**
- * L8 Infrastructure — Hand Runtime (unified).
+ * L8 Infrastructure — Hand Runtime.
  *
- * Initializes all hand capabilities:
- * - Browser (Playwright)
- * - Computer Use (Anthropic)
- *
- * Each sub-runtime registers its tools into L5 registry on init.
+ * Browser automation via Playwright (optional).
+ * Computer Use removed — unreliable in production (2026 consensus).
  */
 import { initBrowser, registerBrowserTools, isBrowserEnabled, closeBrowser } from "./browser.js";
-import { initComputerUse, registerComputerTools, isComputerUseEnabled } from "./computer.js";
 
 export async function initHand(): Promise<void> {
-  // Browser runtime
   const browserOk = await initBrowser();
-  if (browserOk) registerBrowserTools();
-
-  // Computer use runtime
-  const computerOk = initComputerUse();
-  if (computerOk) registerComputerTools();
-
-  const total = (browserOk ? 5 : 0) + (computerOk ? 3 : 0);
-  if (total > 0) {
-    console.log(`[Hand] ${total} hand tools registered (browser: ${browserOk}, computer: ${computerOk})`);
+  if (browserOk) {
+    registerBrowserTools();
+    console.log("[Hand] 5 browser tools registered");
   } else {
-    console.log("[Hand] No hand tools enabled (set BROWSER_ENABLED=true or COMPUTER_USE_ENABLED=true)");
+    console.log("[Hand] Browser disabled (set BROWSER_ENABLED=true to enable)");
   }
 }
 
 export function getHandStatus() {
-  return {
-    browser: { enabled: isBrowserEnabled() },
-    computer: { enabled: isComputerUseEnabled() },
-  };
+  return { browser: { enabled: isBrowserEnabled() } };
 }
 
 export { closeBrowser };
