@@ -284,11 +284,18 @@ router.post("/reject", (req: Request, res: Response) => {
 
 router.post("/first-insight", async (req: Request, res: Response) => {
   try {
+    // Build a prompt that works even with minimal data
+    const nodeCount = (db.prepare("SELECT COUNT(*) as c FROM graph_nodes WHERE user_id=?").get(DEFAULT_USER_ID) as any)?.c ?? 0;
+    const profile = db.prepare("SELECT name, role FROM users WHERE id=?").get(DEFAULT_USER_ID) as any;
+
+    const prompt = nodeCount > 0
+      ? "Based on everything you know about me from my graph, give me the ONE most important thing I should focus on right now and WHY. Be specific, personal, and direct."
+      : profile?.name
+        ? `I'm ${profile.name}${profile.role ? `, ${profile.role}` : ""}. I just started using Anchor. Give me a warm welcome and one smart observation about what I should think about today. Be brief and personal.`
+        : "Welcome me to Anchor and give me one actionable tip for being more productive today. Be brief, warm, and direct.";
+
     const history: any[] = [];
-    const result = await decide(
-      "Based on everything you know about me from my graph, give me the ONE most important thing I should focus on right now and WHY. Be specific, personal, and direct. Reference my actual goals and constraints.",
-      history
-    );
+    const result = await decide(prompt, history);
 
     // Save as working memory so it persists
     writeMemory({
