@@ -18,6 +18,7 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { api } from "@/lib/api";
 import { toast } from "sonner";
+import VoiceInput from "@/components/VoiceInput";
 
 const TYPE_COLORS: Record<string, string> = {
   person: "text-purple-400", goal: "text-blue-400", project: "text-emerald-400",
@@ -224,11 +225,12 @@ export default function NodeDetail() {
         <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.25 }} className="mb-6">
           <h2 className="text-xs text-muted-foreground/60 tracking-widest uppercase mb-3">Ask Anchor</h2>
           <div className="glass rounded-xl p-4">
-            <div className="flex gap-2">
+            <div className="flex gap-2 items-center">
               <input value={askInput} onChange={(e) => setAskInput(e.target.value)}
                 onKeyDown={(e) => e.key === "Enter" && handleAsk()}
                 placeholder={`What should I do next with "${node.label}"?`}
                 className="flex-1 bg-transparent text-sm text-foreground placeholder:text-muted-foreground/30 focus:outline-none" />
+              <VoiceInput onTranscript={(t) => { setAskInput(t); }} className="relative" />
               <button onClick={handleAsk} disabled={asking}
                 className="px-3 py-1.5 rounded-lg bg-primary text-primary-foreground text-xs font-medium hover:bg-primary/90 disabled:opacity-50">
                 {asking ? <Loader2 className="h-3 w-3 animate-spin" /> : <Send className="h-3 w-3" />}
