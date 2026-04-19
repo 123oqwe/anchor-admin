@@ -72,6 +72,8 @@ function extractPeopleFromBrowser(): ExtractedPerson[] {
         if (match) {
           const name = match[1].trim();
           const handle = match[2];
+          // Skip Twitter page artifacts
+          if (name.startsWith("Posts ") || name.startsWith("Replies ") || name.startsWith("Media ") || name.startsWith("Likes ") || name.includes("TechFlow") || name.includes("已上线")) continue;
           if (name && name.length > 1 && !seen.has(name.toLowerCase())) {
             seen.add(name.toLowerCase());
             people.push({ name: `${name} (@${handle})`, source: "twitter", detail: `X/Twitter: @${handle}`, domain: "relationships" });
