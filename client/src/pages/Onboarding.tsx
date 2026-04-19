@@ -86,13 +86,16 @@ export default function Onboarding() {
 
       setScanProgress(100);
 
-      // Generate first insight (the magic moment)
+      // Generate first insight — with 20s timeout so user doesn't wait forever
+      setScanPhase(SCAN_PHASES.length - 1); // show "Generating your first insight..."
       try {
-        const insight = await api.getFirstInsight();
+        const insightPromise = api.getFirstInsight();
+        const timeoutPromise = new Promise((_, reject) => setTimeout(() => reject(new Error("timeout")), 20000));
+        const insight = await Promise.race([insightPromise, timeoutPromise]) as any;
         setFirstInsight(insight.content?.slice(0, 400) ?? "Anchor is ready to help you make better decisions.");
         setInsightConfidence(insight.packet?.confidenceScore ?? 0.85);
       } catch {
-        setFirstInsight("Your Human Graph is ready. Head to Dashboard to start making better decisions.");
+        setFirstInsight("Your Human Graph is ready. I've analyzed your data — head to Dashboard to see what I found.");
         setInsightConfidence(0.8);
       }
 
