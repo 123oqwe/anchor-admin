@@ -135,9 +135,16 @@ export const api = {
   setOverride: (task: string, modelId: string) => req("PUT", `/api/admin/overrides/${task}`, { modelId }),
   clearOverride: (task: string) => req("DELETE", `/api/admin/overrides/${task}`),
 
-  // Integrations
+  // Integrations — Google OAuth
   getIntegrationStatus: () => req<any>("GET", "/api/integrations/status"),
   getGoogleConnectUrl: () => req<any>("GET", "/api/integrations/google/connect"),
   disconnectGoogle: () => req("DELETE", "/api/integrations/google", {}),
   triggerGoogleScan: () => req<any>("POST", "/api/integrations/google/scan", {}),
+
+  // Integrations — Local scan (no OAuth needed)
+  getLocalScanStatus: () => req<any>("GET", "/api/integrations/local/status"),
+  triggerLocalScan: () => req<any>("POST", "/api/integrations/local/scan", {}),
+  triggerBrowserScan: () => req<any>("POST", "/api/integrations/local/scan/browser", {}),
+  triggerContactsScan: () => req<any>("POST", "/api/integrations/local/scan/contacts", {}),
+  triggerCalendarScan: () => req<any>("POST", "/api/integrations/local/scan/calendar", {}),
 };

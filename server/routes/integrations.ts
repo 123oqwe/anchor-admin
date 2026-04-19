@@ -6,8 +6,36 @@ import { db, DEFAULT_USER_ID } from "../infra/storage/db.js";
 import axios from "axios";
 import { saveTokens, getTokens, deleteTokens, isConnected } from "../integrations/token-store.js";
 import { runIngestion } from "../integrations/pipeline.js";
+import { runLocalScan, getLocalScanStatus } from "../integrations/local/index.js";
 
 const router = Router();
+
+// ── Local Scan (browser history + contacts + calendar) ─────────────────────
+
+router.get("/local/status", (_req, res) => {
+  res.json(getLocalScanStatus());
+});
+
+router.post("/local/scan", async (_req, res) => {
+  res.json({ started: true });
+  // Fire and forget — scan runs in background
+  runLocalScan().catch(err => console.error("[LocalScan] Error:", err.message));
+});
+
+router.post("/local/scan/browser", async (_req, res) => {
+  res.json({ started: true });
+  runLocalScan({ browser: true, contacts: false, calendar: false }).catch(() => {});
+});
+
+router.post("/local/scan/contacts", async (_req, res) => {
+  res.json({ started: true });
+  runLocalScan({ browser: false, contacts: true, calendar: false }).catch(() => {});
+});
+
+router.post("/local/scan/calendar", async (_req, res) => {
+  res.json({ started: true });
+  runLocalScan({ browser: false, contacts: false, calendar: true }).catch(() => {});
+});
 
 const GOOGLE_SCOPES = [
   "https://www.googleapis.com/auth/gmail.readonly",

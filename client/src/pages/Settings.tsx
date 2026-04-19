@@ -64,16 +64,19 @@ export default function Settings() {
 
   // Integrations — loaded from API
   const [integrationStatus, setIntegrationStatus] = useState<any>(null);
+  const [localScanStatus, setLocalScanStatus] = useState<any>(null);
+  const [scanning, setScanning] = useState(false);
 
   // Load all settings from API on mount
   useEffect(() => {
     (async () => {
       try {
-        const [profile, settings, cortex, intStatus] = await Promise.all([
+        const [profile, settings, cortex, intStatus, localStatus] = await Promise.all([
           api.getProfile(),
           api.getSettings(),
           api.getCortexStatus().catch(() => null),
           api.getIntegrationStatus().catch(() => null),
+          api.getLocalScanStatus().catch(() => null),
         ]);
 
         if (profile) {
@@ -114,6 +117,7 @@ export default function Settings() {
         }
 
         if (intStatus) setIntegrationStatus(intStatus);
+        if (localStatus) setLocalScanStatus(localStatus);
       } catch (err: any) {
         setError(err.message ?? "Failed to load settings");
       } finally {
@@ -425,14 +429,75 @@ export default function Settings() {
               </motion.div>
             )}
 
-            {/* Integrations — real OAuth for Google, coming soon for others */}
+            {/* Integrations — local scan first, Google OAuth second */}
             {activeSection === "integrations" && (
               <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="space-y-6">
-                {/* Google (Gmail + Calendar) — live OAuth */}
-                <div className="glass rounded-xl p-6">
-                  <h2 className="text-lg font-semibold mb-2">Google (Gmail + Calendar)</h2>
+                {/* Local Scan — the star feature, zero setup */}
+                <div className="glass rounded-xl p-6 border border-primary/20">
+                  <div className="flex items-center gap-2 mb-2">
+                    <Zap className="h-5 w-5 text-primary" />
+                    <h2 className="text-lg font-semibold">Scan This Mac</h2>
+                  </div>
                   <p className="text-xs text-muted-foreground mb-4">
-                    Scan your emails and calendar to automatically build your Human Graph — contacts, meetings, follow-ups, patterns.
+                    Read your browser history, contacts, and calendar — all locally, nothing leaves your machine.
+                    {localScanStatus?.availableBrowsers?.length > 0 && (
+                      <span className="text-primary"> Detected: {localScanStatus.availableBrowsers.join(", ")}</span>
+                    )}
+                  </p>
+
+                  {localScanStatus?.lastScanAt ? (
+                    <div className="space-y-3">
+                      <div className="flex items-center gap-2">
+                        <Check className="h-4 w-4 text-emerald-400" />
+                        <span className="text-sm text-emerald-400 font-medium">
+                          Last scan: {localScanStatus.lastResult?.nodesCreated ?? 0} nodes created
+                        </span>
+                      </div>
+                      <button
+                        onClick={async () => {
+                          setScanning(true);
+                          await api.triggerLocalScan();
+                          toast.success("Scanning... new nodes will appear in your Graph shortly.");
+                          setTimeout(async () => {
+                            setLocalScanStatus(await api.getLocalScanStatus().catch(() => localScanStatus));
+                            setScanning(false);
+                          }, 10000);
+                        }}
+                        disabled={scanning}
+                        className="px-4 py-2 rounded-lg bg-primary/10 text-primary text-sm font-medium hover:bg-primary/20 disabled:opacity-50"
+                      >
+                        {scanning ? "Scanning..." : "Scan Again"}
+                      </button>
+                    </div>
+                  ) : (
+                    <button
+                      onClick={async () => {
+                        setScanning(true);
+                        toast.success("Scanning your Mac... this takes about 30 seconds.");
+                        await api.triggerLocalScan();
+                        setTimeout(async () => {
+                          setLocalScanStatus(await api.getLocalScanStatus().catch(() => null));
+                          setScanning(false);
+                          toast.success("Scan complete! Check your Human Graph.");
+                        }, 15000);
+                      }}
+                      disabled={scanning}
+                      className="px-6 py-3 rounded-xl bg-primary text-primary-foreground text-sm font-semibold hover:bg-primary/90 disabled:opacity-50 transition-all"
+                    >
+                      {scanning ? "Scanning..." : "Allow — Scan My Data"}
+                    </button>
+                  )}
+
+                  <p className="text-[10px] text-muted-foreground mt-3">
+                    Reads: URL titles, contact names, calendar event titles. Does NOT read: passwords, email content, banking, medical sites.
+                  </p>
+                </div>
+
+                {/* Google (Gmail + Calendar) — optional OAuth upgrade */}
+                <div className="glass rounded-xl p-6">
+                  <h2 className="text-lg font-semibold mb-2">Google Cloud (Optional)</h2>
+                  <p className="text-xs text-muted-foreground mb-4">
+                    For deeper email content analysis. Requires Google OAuth setup. The local scan above covers most use cases.
                   </p>
                   {(() => {
                     const google = (integrationStatus as any)?.google;
