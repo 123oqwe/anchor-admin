@@ -70,6 +70,7 @@ export const api = {
   getGraph: () => req<any>("GET", "/api/graph"),
   getDecisionToday: () => req<any>("GET", "/api/graph/decision-today"),
   createNode: (data: any) => req("POST", "/api/graph/nodes", data),
+  getNodeDetail: (id: string) => req<any>("GET", `/api/graph/nodes/${id}`),
   updateNode: (id: string, data: any) => req("PUT", `/api/graph/nodes/${id}`, data),
   deleteNode: (id: string) => req("DELETE", `/api/graph/nodes/${id}`),
 

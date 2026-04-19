@@ -9,6 +9,7 @@ import AdminLayout from "./components/AdminLayout";
 import CommandPalette from "./components/CommandPalette";
 import { useWebSocket } from "./hooks/useWebSocket";
 import Onboarding from "./pages/Onboarding";
+import NodeDetail from "./pages/NodeDetail";
 import Dashboard from "./pages/Dashboard";
 import Advisor from "./pages/Advisor";
 import TwinAgent from "./pages/TwinAgent";
@@ -50,6 +51,7 @@ function Router() {
             <Route path="/memory" component={MemoryUser} />
             <Route path="/workspace" component={Workspace} />
             <Route path="/workspace/:id" component={Workspace} />
+            <Route path="/graph/:id" component={NodeDetail} />
             <Route path="/settings" component={Settings} />
             <Route path="/404" component={NotFound} />
             <Route component={NotFound} />

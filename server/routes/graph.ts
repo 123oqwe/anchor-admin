@@ -80,6 +80,49 @@ router.post("/nodes", (req, res) => {
   res.json({ id });
 });
 
+// ── Single node detail (with edges, health, pagerank, memories) ─────────────
+
+router.get("/nodes/:id", (req, res) => {
+  const node = db.prepare(
+    "SELECT id, domain, label, type, status, captured, detail, created_at as createdAt, updated_at as updatedAt FROM graph_nodes WHERE id=? AND user_id=?"
+  ).get(req.params.id, DEFAULT_USER_ID) as any;
+
+  if (!node) return res.status(404).json({ error: "Node not found" });
+
+  // Edges
+  const outgoing = db.prepare(
+    "SELECT e.type, e.weight, n.label as toLabel, n.id as toId FROM graph_edges e JOIN graph_nodes n ON e.to_node_id=n.id WHERE e.from_node_id=? AND e.user_id=?"
+  ).all(req.params.id, DEFAULT_USER_ID);
+  const incoming = db.prepare(
+    "SELECT e.type, e.weight, n.label as fromLabel, n.id as fromId FROM graph_edges e JOIN graph_nodes n ON e.from_node_id=n.id WHERE e.to_node_id=? AND e.user_id=?"
+  ).all(req.params.id, DEFAULT_USER_ID);
+
+  // Health (for person nodes — exponential decay)
+  let health: number | null = null;
+  if (node.type === "person" || node.type === "relationship") {
+    const { relationshipHealth } = require("../graph/math/decay.js");
+    const daysSince = (Date.now() - new Date(node.updatedAt).getTime()) / 86400000;
+    health = Math.round(relationshipHealth(daysSince, 0) * 100);
+  }
+
+  // PageRank
+  let importance: number | null = null;
+  try {
+    const { computePageRank } = require("../graph/math/pagerank.js");
+    const allNodes = db.prepare("SELECT id FROM graph_nodes WHERE user_id=?").all(DEFAULT_USER_ID) as any[];
+    const allEdges = db.prepare("SELECT from_node_id as fromNodeId, to_node_id as toNodeId, type, weight FROM graph_edges WHERE user_id=?").all(DEFAULT_USER_ID) as any[];
+    const scores = computePageRank({ nodes: allNodes, edges: allEdges });
+    importance = Math.round((scores.get(req.params.id) ?? 0) * 1000) / 10; // percentage
+  } catch {}
+
+  // Related memories
+  const memories = db.prepare(
+    "SELECT id, type, title, content, confidence, created_at as createdAt FROM memories WHERE user_id=? AND (content LIKE ? OR title LIKE ?) ORDER BY created_at DESC LIMIT 5"
+  ).all(DEFAULT_USER_ID, `%${node.label.split(" ")[0]}%`, `%${node.label.split(" ")[0]}%`) as any[];
+
+  res.json({ node, edges: { outgoing, incoming }, health, importance, relatedMemories: memories });
+});
+
 router.put("/nodes/:id", (req, res) => {
   const { label, type, status, captured, detail } = req.body;
   db.prepare("UPDATE graph_nodes SET label=?, type=?, status=?, captured=?, detail=?, updated_at=datetime('now') WHERE id=? AND user_id=?")

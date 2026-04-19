@@ -183,10 +183,12 @@ export default function Dashboard() {
             <h2 className="text-xs font-medium text-muted-foreground/60 tracking-widest uppercase mb-4">Key People</h2>
             <div className="flex gap-3">
               {people.map((p: any) => (
-                <div key={p.id ?? p.label} className="glass rounded-xl px-4 py-3 flex-1">
+                <div key={p.id ?? p.label} onClick={() => p.id && navigate(`/graph/${p.id}`)}
+                  className="glass rounded-xl px-4 py-3 flex-1 cursor-pointer hover:bg-white/[0.03] transition-colors">
                   <div className="flex items-center gap-2 mb-1">
                     <Users className="h-3 w-3 text-purple-400" />
                     <span className="text-sm font-medium text-foreground truncate">{p.label}</span>
+                    <ChevronRight className="h-3 w-3 text-muted-foreground/30 ml-auto" />
                   </div>
                   <span className={`text-[10px] ${p.status === "decaying" ? "text-amber-400" : "text-muted-foreground"}`}>
                     {p.status}
@@ -242,10 +244,13 @@ export default function Dashboard() {
                     {isExpanded && domain.items && (
                       <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: "auto" }} className="mt-3 space-y-1.5">
                         {domain.items.map((item: any) => (
-                          <div key={item.id ?? item.label} className="flex items-center gap-2 text-xs">
+                          <div key={item.id ?? item.label}
+                            onClick={(e) => { e.stopPropagation(); if (item.id) navigate(`/graph/${item.id}`); }}
+                            className="flex items-center gap-2 text-xs cursor-pointer hover:bg-white/[0.03] rounded px-1 py-0.5 -mx-1 transition-colors">
                             <div className={`w-1.5 h-1.5 rounded-full shrink-0 ${STATUS_DOT[item.status] ?? "bg-muted-foreground/30"}`} />
-                            <span className="text-muted-foreground truncate flex-1">{item.label}</span>
+                            <span className="text-muted-foreground truncate flex-1 hover:text-foreground">{item.label}</span>
                             <span className="text-[10px] text-muted-foreground/50">{item.type}</span>
+                            <ChevronRight className="h-2.5 w-2.5 text-muted-foreground/20" />
                           </div>
                         ))}
                       </motion.div>
