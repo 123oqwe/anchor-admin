@@ -464,23 +464,16 @@ export default function Settings() {
                 <div className="glass rounded-xl p-6">
                   <h2 className="text-lg font-semibold mb-2">Telegram Channel</h2>
                   <p className="text-xs text-muted-foreground mb-4">Talk to Anchor from Telegram — no browser needed.</p>
-                  {process.env.TELEGRAM_BOT_TOKEN ? (
-                    <div className="flex items-center gap-2">
-                      <Check className="h-4 w-4 text-emerald-400" />
-                      <span className="text-sm text-emerald-400">Connected</span>
-                    </div>
-                  ) : (
-                    <div className="space-y-2">
-                      <p className="text-xs text-muted-foreground">To connect:</p>
-                      <ol className="text-xs text-muted-foreground/60 space-y-1 list-decimal pl-4">
-                        <li>Open Telegram, search @BotFather</li>
-                        <li>Send /newbot, follow the steps</li>
-                        <li>Copy the bot token</li>
-                        <li>Add TELEGRAM_BOT_TOKEN=your_token to .env</li>
-                        <li>Restart Anchor</li>
-                      </ol>
-                    </div>
-                  )}
+                  <div className="space-y-2">
+                    <p className="text-xs text-muted-foreground">To connect:</p>
+                    <ol className="text-xs text-muted-foreground/60 space-y-1 list-decimal pl-4">
+                      <li>Open Telegram, search @BotFather</li>
+                      <li>Send /newbot, follow the steps</li>
+                      <li>Copy the bot token</li>
+                      <li>Add TELEGRAM_BOT_TOKEN=your_token to .env</li>
+                      <li>Restart Anchor</li>
+                    </ol>
+                  </div>
                 </div>
 
                 {/* Activity Monitor */}
