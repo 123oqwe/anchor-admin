@@ -264,3 +264,12 @@ export function getActivityStatus() {
     totalScreenMinutes: topApps.reduce((s, a) => s + a.minutes, 0),
   };
 }
+
+// ── Cleanup old captures (keep last 30 days) ────────────────────────────────
+
+export function cleanupOldCaptures(): number {
+  const result = db.prepare(
+    "DELETE FROM activity_captures WHERE user_id=? AND captured_at < datetime('now', '-30 days')"
+  ).run(DEFAULT_USER_ID);
+  return result.changes;
+}

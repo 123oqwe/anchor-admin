@@ -109,3 +109,17 @@ async function startServer() {
 }
 
 startServer().catch(console.error);
+
+// Graceful shutdown — checkpoint SQLite WAL before exit
+function shutdown(signal: string) {
+  console.log(`\n[${signal}] Shutting down gracefully...`);
+  try {
+    const { db } = require("./infra/storage/db.js");
+    db.pragma("wal_checkpoint(TRUNCATE)");
+    db.close();
+    console.log("[Shutdown] Database closed cleanly");
+  } catch {}
+  process.exit(0);
+}
+process.on("SIGINT", () => shutdown("SIGINT"));
+process.on("SIGTERM", () => shutdown("SIGTERM"));

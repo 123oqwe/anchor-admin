@@ -8,7 +8,7 @@ import { detectDrift } from "../cognition/twin.js";
 import { checkProactiveTriggers } from "./enforcement.js";
 import { markStaleAsDecaying } from "../graph/writer.js";
 import { runIngestion } from "../integrations/pipeline.js";
-import { captureActiveWindow, updateGraphFromActivity } from "../integrations/local/activity-monitor.js";
+import { captureActiveWindow, updateGraphFromActivity, cleanupOldCaptures } from "../integrations/local/activity-monitor.js";
 
 function log(agent: string, action: string, status = "success") {
   db.prepare("INSERT INTO agent_executions (id, user_id, agent, action, status) VALUES (?,?,?,?,?)")
@@ -110,6 +110,8 @@ schedule("0 3 * * *", async () => {
     if (total > 0) {
       log("Dream Engine", `Dream: p=${stats.pruned} m=${stats.merged} pro=${stats.promoted} sk=${stats.skillsCreated} t=${stats.timeNormalized} cap=${stats.capacityRemoved}`);
     }
+    // Also cleanup old activity captures (keep 30 days)
+    try { const cleaned = cleanupOldCaptures(); if (cleaned > 0) log("Dream Engine", `Cleaned ${cleaned} old activity captures`); } catch {}
   } catch (err: any) {
     console.error("[Cron] Dream consolidation failed:", err.message);
   }

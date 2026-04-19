@@ -4,6 +4,23 @@ import { nanoid } from "nanoid";
 
 const router = Router();
 
+// PageRank cache — invalidated when graph changes
+let prCache: { scores: Map<string, number>; version: string; timestamp: number } | null = null;
+async function getCachedPageRank(): Promise<Map<string, number>> {
+  const version = (db.prepare("SELECT MAX(updated_at) as v FROM graph_nodes WHERE user_id=?").get(DEFAULT_USER_ID) as any)?.v ?? "";
+  if (prCache && prCache.version === version && Date.now() - prCache.timestamp < 300000) {
+    return prCache.scores; // 5min cache
+  }
+  try {
+    const { computePageRank } = await import("../graph/math/pagerank.js");
+    const allNodes = db.prepare("SELECT id FROM graph_nodes WHERE user_id=?").all(DEFAULT_USER_ID) as any[];
+    const allEdges = db.prepare("SELECT from_node_id as fromNodeId, to_node_id as toNodeId, type, weight FROM graph_edges WHERE user_id=?").all(DEFAULT_USER_ID) as any[];
+    const scores = computePageRank({ nodes: allNodes, edges: allEdges });
+    prCache = { scores, version, timestamp: Date.now() };
+    return scores;
+  } catch { return new Map(); }
+}
+
 // Default domains — user can add custom ones
 const DEFAULT_DOMAINS: Record<string, { name: string; icon: string; color: string; bgColor: string; borderColor: string }> = {
   work:          { name: "Work & Career",    icon: "Briefcase",    color: "text-blue-400",    bgColor: "bg-blue-500/10",    borderColor: "border-blue-500/20" },
@@ -82,7 +99,7 @@ router.post("/nodes", (req, res) => {
 
 // ── Single node detail (with edges, health, pagerank, memories) ─────────────
 
-router.get("/nodes/:id", (req, res) => {
+router.get("/nodes/:id", async (req, res) => {
   const node = db.prepare(
     "SELECT id, domain, label, type, status, captured, detail, created_at as createdAt, updated_at as updatedAt FROM graph_nodes WHERE id=? AND user_id=?"
   ).get(req.params.id, DEFAULT_USER_ID) as any;
@@ -100,19 +117,16 @@ router.get("/nodes/:id", (req, res) => {
   // Health (for person nodes — exponential decay)
   let health: number | null = null;
   if (node.type === "person" || node.type === "relationship") {
-    const { relationshipHealth } = require("../graph/math/decay.js");
+    const { relationshipHealth } = await import("../graph/math/decay.js");
     const daysSince = (Date.now() - new Date(node.updatedAt).getTime()) / 86400000;
     health = Math.round(relationshipHealth(daysSince, 0) * 100);
   }
 
-  // PageRank
+  // PageRank (cached — recomputed only when graph changes, max every 5min)
   let importance: number | null = null;
   try {
-    const { computePageRank } = require("../graph/math/pagerank.js");
-    const allNodes = db.prepare("SELECT id FROM graph_nodes WHERE user_id=?").all(DEFAULT_USER_ID) as any[];
-    const allEdges = db.prepare("SELECT from_node_id as fromNodeId, to_node_id as toNodeId, type, weight FROM graph_edges WHERE user_id=?").all(DEFAULT_USER_ID) as any[];
-    const scores = computePageRank({ nodes: allNodes, edges: allEdges });
-    importance = Math.round((scores.get(req.params.id) ?? 0) * 1000) / 10; // percentage
+    const scores = await getCachedPageRank();
+    importance = Math.round((scores.get(req.params.id) ?? 0) * 1000) / 10;
   } catch {}
 
   // Related memories
@@ -154,7 +168,7 @@ router.post("/nodes/:id/ask", async (req, res) => {
   const contextMsg = `[Context: the user is looking at their ${node.type} "${node.label}" (${node.domain}, ${node.status}). Detail: ${node.detail ?? "none"}]\n\n${message ?? "What should I do next with this?"}`;
 
   try {
-    const { decide } = require("../cognition/decision.js");
+    const { decide } = await import("../cognition/decision.js");
     const result = await decide(contextMsg, []);
     res.json({ content: result.raw, structured: result.structured });
   } catch (err: any) {
