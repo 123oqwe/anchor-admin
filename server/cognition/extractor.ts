@@ -13,13 +13,7 @@
  */
 import { text } from "../infra/compute/index.js";
 import { createNode, createEdge, updateNodeStatus } from "../graph/writer.js";
-import { db, DEFAULT_USER_ID } from "../infra/storage/db.js";
-import { nanoid } from "nanoid";
-
-function log(agent: string, action: string, status = "success") {
-  db.prepare("INSERT INTO agent_executions (id, user_id, agent, action, status) VALUES (?,?,?,?,?)")
-    .run(nanoid(), DEFAULT_USER_ID, agent, action, status);
-}
+import { db, DEFAULT_USER_ID, logExecution } from "../infra/storage/db.js";
 
 // ── Debounce: batch messages within 3s window ───────────────────────────────
 
@@ -249,12 +243,12 @@ async function doExtraction(combinedMessage: string): Promise<void> {
     }
 
     if (nodesCreated + nodesUpdated + edgesCreated > 0) {
-      log("Observation Agent", `Extracted: +${nodesCreated} nodes, ~${nodesUpdated} updates, +${edgesCreated} edges`);
+      logExecution("Observation Agent", `Extracted: +${nodesCreated} nodes, ~${nodesUpdated} updates, +${edgesCreated} edges`);
       console.log(`[Observation Agent] Graph extraction: +${nodesCreated} nodes, ~${nodesUpdated} updates, +${edgesCreated} edges`);
     }
   } catch (err: any) {
     console.error("[Observation Agent] Extraction error:", err.message);
-    log("Observation Agent", `Extraction failed: ${err.message}`, "failed");
+    logExecution("Observation Agent", `Extraction failed: ${err.message}`, "failed");
   }
 }
 

@@ -4,7 +4,7 @@
  * One function: runLocalScan() — reads browser history, contacts, calendar.
  * All data stays local. No API keys. No OAuth. No cloud.
  */
-import { db, DEFAULT_USER_ID } from "../../infra/storage/db.js";
+import { db, DEFAULT_USER_ID, logExecution } from "../../infra/storage/db.js";
 import { nanoid } from "nanoid";
 import { scanBrowserHistory, getAvailableBrowsers } from "./browser-history.js";
 import { scanContacts } from "./contacts.js";
@@ -12,12 +12,8 @@ import { scanCalendar } from "./calendar.js";
 import { deepScanMac, profileToText } from "./deep-scan.js";
 import { extractAndSavePeople } from "./people-extractor.js";
 import { extractFromText } from "../../cognition/extractor.js";
+import { bus } from "../../orchestration/bus.js";
 import type { IngestionEvent } from "../types.js";
-
-function log(agent: string, action: string, status = "success") {
-  db.prepare("INSERT INTO agent_executions (id, user_id, agent, action, status) VALUES (?,?,?,?,?)")
-    .run(nanoid(), DEFAULT_USER_ID, agent, action, status);
-}
 
 // ── Consent Management ─────────────────────────────────────────────────────
 
@@ -95,6 +91,7 @@ export async function runLocalScan(opts?: {
   try {
     // ── Step 0: Deep Mac scan — apps, projects, files, tech stack ──
     // This runs FIRST because it's instant (no LLM) and gives rich context
+    bus.publish({ type: "SCAN_PROGRESS", payload: { phase: "deep_scan", status: "running", found: 0 } });
     const macProfile = deepScanMac();
     const profileText = profileToText(macProfile);
     if (profileText.length > 50) {
@@ -130,9 +127,17 @@ export async function runLocalScan(opts?: {
     console.log(`[LocalScan] People: ${peopleResult.total} extracted from ${JSON.stringify(peopleResult.sources)}`);
 
     // ── Step 1: Gather events from all sources ──
+    bus.publish({ type: "SCAN_PROGRESS", payload: { phase: "browser", status: "running", found: 0 } });
     if (browser) browserEvents = scanBrowserHistory(sinceDaysAgo);
+    bus.publish({ type: "SCAN_PROGRESS", payload: { phase: "browser", status: "done", found: browserEvents.length } });
+
+    bus.publish({ type: "SCAN_PROGRESS", payload: { phase: "contacts", status: "running", found: 0 } });
     if (contacts) contactEvents = scanContacts();
+    bus.publish({ type: "SCAN_PROGRESS", payload: { phase: "contacts", status: "done", found: contactEvents.length } });
+
+    bus.publish({ type: "SCAN_PROGRESS", payload: { phase: "calendar", status: "running", found: 0 } });
     if (calendar) calendarEvents = scanCalendar(sinceDaysAgo);
+    bus.publish({ type: "SCAN_PROGRESS", payload: { phase: "calendar", status: "done", found: calendarEvents.length } });
 
     const allEvents = [...browserEvents, ...contactEvents, ...calendarEvents];
     const totalFetched = allEvents.length;
@@ -160,6 +165,7 @@ export async function runLocalScan(opts?: {
       .sort((a, b) => b.totalVisits - a.totalVisits)
       .slice(0, 30);
 
+    bus.publish({ type: "SCAN_PROGRESS", payload: { phase: "extraction", status: "running", found: allEvents.length } });
     if (topDomains.length > 0) {
       const browserText = "Recent browsing activity (most visited sites):\n" +
         topDomains.map(d => `${d.domain} (${d.totalVisits} visits): ${d.topPages.map(p => p.title).join("; ")}`).join("\n");
@@ -185,11 +191,12 @@ export async function runLocalScan(opts?: {
 
     const nodesAfter = (db.prepare("SELECT COUNT(*) as c FROM graph_nodes WHERE user_id=?").get(DEFAULT_USER_ID) as any)?.c ?? 0;
     const nodesCreated = nodesAfter - nodesBefore;
+    bus.publish({ type: "SCAN_PROGRESS", payload: { phase: "done", status: "done", found: nodesCreated } });
 
     db.prepare("UPDATE ingestion_log SET status='done', events_fetched=?, nodes_created=?, finished_at=datetime('now') WHERE id=?")
       .run(totalFetched, nodesCreated, logId);
 
-    log("Local Scanner", `Scan done: ${browserEvents.length} URLs, ${contactEvents.length} contacts, ${calendarEvents.length} events → ${nodesCreated} nodes`);
+    logExecution("Local Scanner", `Scan done: ${browserEvents.length} URLs, ${contactEvents.length} contacts, ${calendarEvents.length} events → ${nodesCreated} nodes`);
     console.log(`[LocalScan] Done: ${totalFetched} events → ${nodesCreated} new nodes`);
 
     return {
@@ -203,7 +210,7 @@ export async function runLocalScan(opts?: {
     console.error("[LocalScan] Error:", err.message);
     db.prepare("UPDATE ingestion_log SET status='failed', error=?, finished_at=datetime('now') WHERE id=?")
       .run(err.message?.slice(0, 500), logId);
-    log("Local Scanner", `Scan failed: ${err.message}`, "failed");
+    logExecution("Local Scanner", `Scan failed: ${err.message}`, "failed");
     return { browserEvents: browserEvents.length, contacts: contactEvents.length, calendarEvents: calendarEvents.length, nodesCreated: 0, browsers: getAvailableBrowsers() };
   }
 }

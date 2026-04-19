@@ -271,7 +271,8 @@ export async function runSparseAnalysis(): Promise<SparseAnalysisResult> {
       }],
       maxTokens: 200,
     });
-  } catch {
+  } catch (err) {
+    console.error("[Sparse] Analysis failed:", err);
     // If LLM fails, build a rule-based summary
     const topFact = facts[0]?.content ?? "I'm just getting to know you.";
     const topInf = inferences[0]?.content ?? "";

@@ -135,7 +135,7 @@ export async function analyzeExecutionTraces(daysBack = 7): Promise<TraceAnalysi
     if (Array.isArray(parsed.optimizations)) {
       optimizations = parsed.optimizations;
     }
-  } catch {}
+  } catch (err) { console.error("[GEPA] Analysis failed:", err); }
 
   const efficiency = Math.max(0, 100 - wastePatterns.length * 15 - Math.round(failedCalls.length / totalCalls * 100));
 

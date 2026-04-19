@@ -20,7 +20,8 @@ export type AnchorEvent =
   | { type: "TWIN_UPDATED";  payload: { insight: string } }
   | { type: "GRAPH_UPDATED"; payload: { nodeId: string; status: string; label: string } }
   | { type: "TASK_COMPLETED"; payload: { taskId: string; title: string } }
-  | { type: "NOTIFICATION"; payload: { id: string; type: string; title: string; body: string; priority: string; action?: any } };
+  | { type: "NOTIFICATION"; payload: { id: string; type: string; title: string; body: string; priority: string; action?: any } }
+  | { type: "SCAN_PROGRESS"; payload: { phase: string; status: string; found: number } };
 
 class AnchorBus extends EventEmitter {
   publish(data: AnchorEvent) {

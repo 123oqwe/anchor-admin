@@ -21,6 +21,7 @@ import {
   Briefcase, Heart, DollarSign, GraduationCap, ChevronRight,
 } from "lucide-react";
 import { api } from "@/lib/api";
+import { useAnchorStore } from "@/lib/store";
 
 const DOMAIN_ICONS: Record<string, any> = {
   work: Briefcase, relationships: Users, finance: DollarSign,
@@ -47,21 +48,24 @@ export default function Dashboard() {
   const [people, setPeople] = useState<any[]>([]);
   const [domains, setDomains] = useState<any[]>([]);
   const [expandedDomain, setExpandedDomain] = useState<string | null>(null);
+  const [digest, setDigest] = useState<any>(null);
+  const { fetchGraph, fetchDecision, fetchDigest } = useAnchorStore();
 
   useEffect(() => {
     Promise.all([
-      api.getDecisionToday().catch(() => null),
+      fetchDecision().catch(() => null),
       api.getState().catch(() => null),
       fetch("/api/agents/self-portrait").then(r => r.ok ? r.json() : null).catch(() => null),
-      api.getGraph().catch(() => null),
-    ]).then(([dec, st, port, graph]) => {
+      fetchGraph().catch(() => null),
+      fetchDigest().catch(() => null),
+    ]).then(([dec, st, port, graph, dig]) => {
       setDecision(dec);
       setState(st);
       setPortrait(port);
-      // Extract people and domains from graph
       const personNodes = graph?.domains?.flatMap((d: any) => d.items?.filter((i: any) => i.type === "person") ?? []) ?? [];
       setPeople(personNodes.slice(0, 3));
       setDomains(graph?.domains ?? []);
+      setDigest(dig);
     }).finally(() => setLoading(false));
   }, []);
 
@@ -128,6 +132,42 @@ export default function Dashboard() {
             </motion.button>
           )}
         </motion.div>
+
+        {/* ── System Activity (what happened overnight) ─── */}
+        {digest?.hasUpdates && (
+          <motion.div {...fade} transition={{ delay: 0.08, duration: 0.5 }} className="mt-8 mb-2">
+            <h2 className="text-xs font-medium text-muted-foreground/60 tracking-widest uppercase mb-3">While You Were Away</h2>
+            <div className="glass rounded-xl p-4 space-y-2">
+              {digest.recentActions?.slice(0, 3).map((a: any, i: number) => (
+                <div key={i} className="flex items-center gap-2 text-xs">
+                  <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${a.status === "success" ? "bg-emerald-400" : "bg-red-400"}`} />
+                  <span className="text-muted-foreground">{a.agent}</span>
+                  <span className="text-foreground truncate flex-1">{a.action}</span>
+                </div>
+              ))}
+              {digest.newInsights?.length > 0 && (
+                <div className="pt-1 border-t border-white/5 mt-2">
+                  {digest.newInsights.slice(0, 2).map((ins: any, i: number) => (
+                    <div key={i} className="flex items-center gap-2 text-xs mt-1">
+                      <Brain className="h-3 w-3 text-primary shrink-0" />
+                      <span className="text-muted-foreground truncate">{ins.insight}</span>
+                    </div>
+                  ))}
+                </div>
+              )}
+              {digest.urgentItems?.length > 0 && (
+                <div className="pt-1 border-t border-white/5 mt-2">
+                  {digest.urgentItems.slice(0, 2).map((item: any, i: number) => (
+                    <div key={i} className="flex items-center gap-2 text-xs mt-1">
+                      <AlertCircle className="h-3 w-3 text-amber-400 shrink-0" />
+                      <span className="text-amber-400/80 truncate">{item.label} — {item.status}</span>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          </motion.div>
+        )}
 
         {/* ── Current State ───────────────────────────────────── */}
         <motion.div {...fade} transition={{ delay: 0.15, duration: 0.5 }} className="mt-14">

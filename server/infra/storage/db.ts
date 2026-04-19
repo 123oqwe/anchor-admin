@@ -460,4 +460,10 @@ try { db.exec("ALTER TABLE skills ADD COLUMN source TEXT NOT NULL DEFAULT 'dream
 
 seedIfEmpty();
 
+/** Shared agent execution logger — replaces duplicate log() in 19 files. */
+export function logExecution(agent: string, action: string, status = "success") {
+  db.prepare("INSERT INTO agent_executions (id, user_id, agent, action, status) VALUES (?,?,?,?,?)")
+    .run(nanoid(), DEFAULT_USER_ID, agent, action, status);
+}
+
 export { DEFAULT_USER_ID };

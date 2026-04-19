@@ -1,5 +1,8 @@
 import { schedule } from "node-cron";
-import { db, DEFAULT_USER_ID } from "../infra/storage/db.js";
+import path from "path";
+import fs from "fs";
+import { fileURLToPath } from "url";
+import { db, DEFAULT_USER_ID, logExecution } from "../infra/storage/db.js";
 import { nanoid } from "nanoid";
 import { text } from "../infra/compute/index.js";
 import { invalidateSnapshot, writeMemory } from "../memory/retrieval.js";
@@ -9,11 +12,6 @@ import { checkProactiveTriggers } from "./enforcement.js";
 import { markStaleAsDecaying } from "../graph/writer.js";
 import { runIngestion } from "../integrations/pipeline.js";
 import { captureActiveWindow, updateGraphFromActivity, cleanupOldCaptures } from "../integrations/local/activity-monitor.js";
-
-function log(agent: string, action: string, status = "success") {
-  db.prepare("INSERT INTO agent_executions (id, user_id, agent, action, status) VALUES (?,?,?,?,?)")
-    .run(nanoid(), DEFAULT_USER_ID, agent, action, status);
-}
 
 // ── Every day 08:00 — Morning Digest ────────────────────────────────────────
 schedule("0 8 * * *", async () => {
@@ -38,10 +36,10 @@ schedule("0 8 * * *", async () => {
     db.prepare(
       "INSERT INTO memories (id, user_id, type, title, content, tags, source, confidence) VALUES (?,?,?,?,?,?,?,?)"
     ).run(nanoid(), DEFAULT_USER_ID, "working", `Morning Digest — ${new Date().toLocaleDateString()}`, content, JSON.stringify(["digest", "daily"]), "Observation Agent", 0.9);
-    log("Observation Agent", "Morning digest generated");
+    logExecution("Observation Agent", "Morning digest generated");
   } catch (err: any) {
     console.error("[Cron] Morning Digest failed:", err.message);
-    log("Observation Agent", "Morning digest failed", "failed");
+    logExecution("Observation Agent", "Morning digest failed", "failed");
   }
 });
 
@@ -49,7 +47,7 @@ schedule("0 8 * * *", async () => {
 schedule("0 */6 * * *", () => {
   try {
     const changed = markStaleAsDecaying(5); // 5 days
-    if (changed > 0) log("Observation Agent", `Decay check: ${changed} nodes marked decaying`);
+    if (changed > 0) logExecution("Observation Agent", `Decay check: ${changed} nodes marked decaying`);
   } catch (err: any) {
     console.error("[Cron] Decay Checker failed:", err.message);
   }
@@ -80,14 +78,14 @@ schedule("0 9 * * 1", async () => {
     if (parsed?.insight) {
       db.prepare("INSERT INTO twin_insights (id, user_id, category, insight, confidence) VALUES (?,?,?,?,?)")
         .run(nanoid(), DEFAULT_USER_ID, parsed.category ?? "behavior", parsed.insight, parsed.confidence ?? 0.7);
-      log("Twin Agent", "Weekly reflection complete");
+      logExecution("Twin Agent", "Weekly reflection complete");
     }
 
     // Drift detection: compare recent vs older insights
     await detectDrift();
   } catch (err: any) {
     console.error("[Cron] Weekly reflection failed:", err.message);
-    log("Twin Agent", "Weekly reflection failed", "failed");
+    logExecution("Twin Agent", "Weekly reflection failed", "failed");
   }
 });
 
@@ -95,7 +93,7 @@ schedule("0 9 * * 1", async () => {
 schedule("0 22 * * *", () => {
   try {
     const result = db.prepare("UPDATE tasks SET status='blocked' WHERE status='in-progress' AND julianday('now') - julianday(created_at) > 7").run();
-    if (result.changes > 0) log("Workspace Agent", `${result.changes} stale tasks marked blocked`);
+    if (result.changes > 0) logExecution("Workspace Agent", `${result.changes} stale tasks marked blocked`);
   } catch (err: any) {
     console.error("[Cron] Stale Task Detector failed:", err.message);
   }
@@ -108,10 +106,10 @@ schedule("0 3 * * *", async () => {
     invalidateSnapshot(); // force memory snapshot refresh after dream
     const total = stats.pruned + stats.merged + stats.promoted + stats.skillsCreated + stats.timeNormalized + stats.capacityRemoved;
     if (total > 0) {
-      log("Dream Engine", `Dream: p=${stats.pruned} m=${stats.merged} pro=${stats.promoted} sk=${stats.skillsCreated} t=${stats.timeNormalized} cap=${stats.capacityRemoved}`);
+      logExecution("Dream Engine", `Dream: p=${stats.pruned} m=${stats.merged} pro=${stats.promoted} sk=${stats.skillsCreated} t=${stats.timeNormalized} cap=${stats.capacityRemoved}`);
     }
     // Also cleanup old activity captures (keep 30 days)
-    try { const cleaned = cleanupOldCaptures(); if (cleaned > 0) log("Dream Engine", `Cleaned ${cleaned} old activity captures`); } catch {}
+    try { const cleaned = cleanupOldCaptures(); if (cleaned > 0) logExecution("Dream Engine", `Cleaned ${cleaned} old activity captures`); } catch (err) { console.error("[Cron] Activity cleanup failed:", err); }
   } catch (err: any) {
     console.error("[Cron] Dream consolidation failed:", err.message);
   }
@@ -122,7 +120,7 @@ schedule("0 */6 * * *", async () => {
   try {
     const result = await runIngestion(DEFAULT_USER_ID, "incremental");
     if (result && result.eventsFetched > 0) {
-      log("Ingestion Pipeline", `Incremental: ${result.eventsFetched} events → ${result.nodesCreated} nodes`);
+      logExecution("Ingestion Pipeline", `Incremental: ${result.eventsFetched} events → ${result.nodesCreated} nodes`);
     }
   } catch (err: any) {
     console.error("[Cron] Ingestion failed:", err.message);
@@ -143,7 +141,7 @@ schedule("0 */12 * * *", () => {
         source: "Orchestrator",
         confidence: 0.85,
       });
-      log("Orchestrator", `Proactive trigger: ${trigger.reason}`);
+      logExecution("Orchestrator", `Proactive trigger: ${trigger.reason}`);
       console.log(`[Cron] Proactive: ${trigger.reason}`);
     }
   } catch (err: any) {
@@ -155,24 +153,55 @@ schedule("0 */12 * * *", () => {
 schedule("*/5 * * * *", () => {
   try {
     captureActiveWindow();
-  } catch {}
+  } catch (err) { console.error("[Cron] Activity capture failed:", err); }
 });
 
 // ── Every 6 hours — Update Graph from Activity ──────────────────────────────
 schedule("30 */6 * * *", () => {
   try {
     const result = updateGraphFromActivity();
-    if (result.updated > 0) log("Activity Monitor", `Updated ${result.updated} nodes from activity data`);
+    if (result.updated > 0) logExecution("Activity Monitor", `Updated ${result.updated} nodes from activity data`);
     for (const insight of result.insights) {
-      log("Activity Monitor", insight);
+      logExecution("Activity Monitor", insight);
     }
   } catch (err: any) {
     console.error("[Cron] Activity update failed:", err.message);
   }
 });
 
+// ── Every day 02:55 — SQLite Backup (before Dream Engine) ─────────────────
+schedule("55 2 * * *", () => {
+  try {
+    const dbPath = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "infra", "anchor.db");
+    const backupDir = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "infra", "backups");
+    if (!fs.existsSync(backupDir)) fs.mkdirSync(backupDir, { recursive: true });
+
+    const date = new Date().toISOString().slice(0, 10);
+    const backupPath = path.join(backupDir, `anchor-${date}.db`);
+
+    // SQLite backup API
+    db.backup(backupPath).then(() => {
+      logExecution("Backup", `Daily backup saved: anchor-${date}.db`);
+      console.log(`[Cron] Backup saved: ${backupPath}`);
+
+      // Cleanup: keep only last 7 days
+      const files = fs.readdirSync(backupDir).filter(f => f.startsWith("anchor-") && f.endsWith(".db")).sort();
+      while (files.length > 7) {
+        const old = files.shift()!;
+        fs.unlinkSync(path.join(backupDir, old));
+        console.log(`[Cron] Deleted old backup: ${old}`);
+      }
+    }).catch((err: any) => {
+      console.error("[Cron] Backup failed:", err.message);
+      logExecution("Backup", "Daily backup failed", "failed");
+    });
+  } catch (err: any) {
+    console.error("[Cron] Backup setup failed:", err.message);
+  }
+});
+
 export function startCronJobs() {
   // Start first capture immediately
-  try { captureActiveWindow(); } catch {}
+  try { captureActiveWindow(); } catch (err) { console.error("[Cron] Initial capture failed:", err); }
   console.log("⏰ Cron: Activity(5min) | Digest(8am) | Decay(6h) | Twin(Mon 9am) | Tasks(10pm) | Dream(3am) | Proactive(3h) | GraphUpdate(6h)");
 }

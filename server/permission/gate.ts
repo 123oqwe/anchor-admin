@@ -79,7 +79,7 @@ function saveTrustToDB(actionClass: ActionClass): void {
 }
 
 // Load on module init
-try { loadTrustFromDB(); } catch {}
+try { loadTrustFromDB(); } catch (err) { console.error("[Trust] Failed to load trust state:", err); }
 
 function getTrustLevel(actionClass: ActionClass): PermissionLevel {
   const policy = DEFAULT_POLICY[actionClass];
@@ -180,23 +180,32 @@ export function checkViolation(violation: string): { severity: string; response:
 export function checkPermission(req: GateRequest): GateOutcome {
   // 0. Emergency lockdown check
   if (systemLockdown) {
+    persistPermissionAudit("system", "deny", "no_direct_execution", req.source, "System lockdown active");
     return { decision: "deny", reason: "System is in emergency lockdown — all actions denied", boundary: "no_direct_execution" };
   }
 
   const policy = DEFAULT_POLICY[req.actionClass];
-  if (!policy) return { decision: "deny", reason: `Unknown action class: ${req.actionClass}`, boundary: "no_direct_execution" };
+  if (!policy) {
+    persistPermissionAudit(req.actionClass, "deny", "no_direct_execution", req.source, req.description);
+    return { decision: "deny", reason: `Unknown action class: ${req.actionClass}`, boundary: "no_direct_execution" };
+  }
 
   // 1. Derived-write prohibition
   const derivedBlock = checkDerivedWriteProhibition(req);
-  if (derivedBlock) return { decision: "deny", reason: derivedBlock, boundary: "no_direct_execution" };
+  if (derivedBlock) {
+    persistPermissionAudit(req.actionClass, "deny", "no_direct_execution", req.source, derivedBlock);
+    return { decision: "deny", reason: derivedBlock, boundary: "no_direct_execution" };
+  }
 
   // 2. Cron source restriction
   if (req.source === "cron" && !policy.cronAllowed) {
+    persistPermissionAudit(req.actionClass, "deny", "no_direct_execution", req.source, req.description);
     return { decision: "deny", reason: `${req.actionClass} not allowed from cron jobs`, boundary: "no_direct_execution" };
   }
 
   // 3. Rate limit check
   if (!checkRateLimit(req.actionClass, policy.maxPerHour)) {
+    persistPermissionAudit(req.actionClass, "deny", "no_direct_execution", req.source, "Rate limit exceeded");
     return { decision: "deny", reason: `Rate limit exceeded: ${req.actionClass} (max ${policy.maxPerHour}/hour)`, boundary: "no_direct_execution" };
   }
 
@@ -217,18 +226,22 @@ export function checkPermission(req: GateRequest): GateOutcome {
   }
 
   if (effectiveLevel === "L1_draft") {
+    persistPermissionAudit(req.actionClass, "require_confirmation", "approval_required", req.source, req.description);
     return { decision: "require_confirmation", reason: "Action is draft-only at current trust level", actionClass: req.actionClass, boundary: "approval_required" };
   }
 
   if (effectiveLevel === "L0_read_only") {
+    persistPermissionAudit(req.actionClass, "deny", "no_direct_execution", req.source, "Read-only mode");
     return { decision: "deny", reason: "Action not permitted — system is in read-only mode", boundary: "no_direct_execution" };
   }
 
   // L2 from non-user source
   if (effectiveLevel === "L2_confirm_execute" && req.source !== "user_triggered") {
+    persistPermissionAudit(req.actionClass, "require_confirmation", "approval_required", req.source, req.description);
     return { decision: "require_confirmation", reason: "Non-user action requires explicit approval", actionClass: req.actionClass, boundary: "approval_required" };
   }
 
+  persistPermissionAudit(req.actionClass, "require_confirmation", "approval_required", req.source, req.description);
   return { decision: "require_confirmation", reason: "Requires user approval", actionClass: req.actionClass, boundary: "approval_required" };
 }
 
@@ -251,7 +264,7 @@ function persistPermissionAudit(actionClass: string, decision: string, boundary:
     db.prepare(
       "INSERT INTO permission_audit (id, action_class, decision, boundary, source, description) VALUES (?,?,?,?,?,?)"
     ).run(nanoid(), actionClass, decision, boundary, source, description.slice(0, 200));
-  } catch {}
+  } catch (err) { console.error("[Audit] Failed to persist permission audit:", err); }
 }
 
 function auditLog(agent: string, action: string): void {

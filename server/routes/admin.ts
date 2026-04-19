@@ -1,4 +1,5 @@
 import { Router } from "express";
+import { db, DEFAULT_USER_ID } from "../infra/storage/db.js";
 import { setApiKey, deleteApiKey, getApiKey } from "../infra/compute/keys.js";
 import { getRegistryInfo } from "../execution/registry.js";
 import { getHandStatus } from "../infra/hand/index.js";
@@ -198,6 +199,64 @@ router.get("/infra", (_req, res) => {
     mcp: getMCPStatus(),
     rag: getRAGStatus(),
   });
+});
+
+// ── System Health Dashboard ─────────────────────────────────────────────────
+
+router.get("/health", (_req, res) => {
+  try {
+    // Confirm rate
+    const totalConfirms = (db.prepare("SELECT COUNT(*) as c FROM satisfaction_signals WHERE user_id=? AND signal_type='plan_confirmed'").get(DEFAULT_USER_ID) as any)?.c ?? 0;
+    const totalRejects = (db.prepare("SELECT COUNT(*) as c FROM satisfaction_signals WHERE user_id=? AND signal_type='plan_rejected'").get(DEFAULT_USER_ID) as any)?.c ?? 0;
+    const totalDecisions = totalConfirms + totalRejects;
+    const confirmRate = totalDecisions > 0 ? Math.round((totalConfirms / totalDecisions) * 100) : 0;
+
+    // Avg response time (from llm_calls)
+    const avgLatency = (db.prepare("SELECT AVG(latency_ms) as avg FROM llm_calls WHERE task='decision' AND created_at >= datetime('now', '-7 days')").get() as any)?.avg ?? 0;
+
+    // Skill reuse
+    const totalSkills = (db.prepare("SELECT COUNT(*) as c FROM skills WHERE user_id=?").get(DEFAULT_USER_ID) as any)?.c ?? 0;
+    const usedSkills = (db.prepare("SELECT COUNT(*) as c FROM skills WHERE user_id=? AND use_count > 0").get(DEFAULT_USER_ID) as any)?.c ?? 0;
+
+    // Silent failures (agent_executions with status 'failed' in last 24h)
+    const failures24h = (db.prepare("SELECT COUNT(*) as c FROM agent_executions WHERE user_id=? AND status='failed' AND created_at >= datetime('now', '-24 hours')").get(DEFAULT_USER_ID) as any)?.c ?? 0;
+
+    // Top failure agents
+    const topFailures = db.prepare(
+      "SELECT agent, COUNT(*) as cnt FROM agent_executions WHERE user_id=? AND status='failed' AND created_at >= datetime('now', '-7 days') GROUP BY agent ORDER BY cnt DESC LIMIT 5"
+    ).all(DEFAULT_USER_ID) as any[];
+
+    // Evolution state
+    const evolutionDims = db.prepare("SELECT dimension, current_value, evidence_count FROM evolution_state WHERE user_id=?").all(DEFAULT_USER_ID) as any[];
+
+    // Dream log (last run)
+    const lastDream = db.prepare("SELECT * FROM dream_log ORDER BY created_at DESC LIMIT 1").get() as any;
+
+    // Permission audit summary
+    const auditSummary = db.prepare(
+      "SELECT decision, COUNT(*) as cnt FROM permission_audit WHERE created_at >= datetime('now', '-7 days') GROUP BY decision"
+    ).all() as any[];
+
+    res.json({
+      confirmRate,
+      totalDecisions,
+      avgResponseMs: Math.round(avgLatency),
+      skills: { total: totalSkills, used: usedSkills, reuseRate: totalSkills > 0 ? Math.round((usedSkills / totalSkills) * 100) : 0 },
+      failures24h,
+      topFailures,
+      evolution: evolutionDims,
+      lastDream,
+      permissionAudit: auditSummary,
+    });
+  } catch (err: any) {
+    // Some tables may not exist yet — return partial data gracefully
+    res.json({
+      confirmRate: 0, totalDecisions: 0, avgResponseMs: 0,
+      skills: { total: 0, used: 0, reuseRate: 0 },
+      failures24h: 0, topFailures: [], evolution: [], lastDream: null, permissionAudit: [],
+      error: err.message,
+    });
+  }
 });
 
 export default router;

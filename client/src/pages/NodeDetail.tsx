@@ -10,10 +10,10 @@ import { useState, useEffect } from "react";
 import { useRoute, useLocation } from "wouter";
 import { motion } from "framer-motion";
 import {
-  ArrowLeft, Save, Trash2, Mail, Target, Bell, Send,
+  ArrowLeft, Save, Trash2, Mail, Target, Send,
   Loader2, Users, Briefcase, Heart, DollarSign,
   GraduationCap, Brain, ChevronRight, CheckCircle2,
-  Circle, Clock, MessageSquare,
+  Circle, Clock, MessageSquare, X,
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { api } from "@/lib/api";
@@ -34,6 +34,57 @@ const STATUS_ICON: Record<string, any> = {
 };
 const STATUSES = ["active", "in-progress", "done", "blocked", "decaying", "stable"];
 
+function MiniGraph({ node, edges }: { node: any; edges: { outgoing: any[]; incoming: any[] } }) {
+  const allEdges = [
+    ...(edges.outgoing ?? []).filter((e: any) => e.weight > 0.3 || e.type !== "contextual"),
+    ...(edges.incoming ?? []).filter((e: any) => e.weight > 0.3 || e.type !== "contextual"),
+  ].slice(0, 12);
+
+  if (allEdges.length === 0) return null;
+
+  const [, navigate] = useLocation();
+  const cx = 150, cy = 100; // center
+  const r = 70; // radius
+
+  const neighbors = allEdges.map((e: any, i: number) => {
+    const angle = (i / allEdges.length) * 2 * Math.PI - Math.PI / 2;
+    return {
+      id: e.toId ?? e.fromId,
+      label: e.toLabel ?? e.fromLabel,
+      type: e.type,
+      x: cx + Math.cos(angle) * r,
+      y: cy + Math.sin(angle) * r,
+    };
+  });
+
+  return (
+    <svg viewBox="0 0 300 200" className="w-full h-40">
+      {/* Edges */}
+      {neighbors.map((n, i) => (
+        <line key={`e${i}`} x1={cx} y1={cy} x2={n.x} y2={n.y}
+          stroke="rgba(255,255,255,0.08)" strokeWidth="1" />
+      ))}
+      {/* Center node */}
+      <circle cx={cx} cy={cy} r="18" fill="rgba(59, 130, 246, 0.2)" stroke="rgba(59, 130, 246, 0.5)" strokeWidth="1.5" />
+      <text x={cx} y={cy + 1} textAnchor="middle" dominantBaseline="middle" fill="rgba(59, 130, 246, 0.9)" fontSize="7" fontWeight="600">
+        {node.label.length > 12 ? node.label.slice(0, 10) + ".." : node.label}
+      </text>
+      {/* Neighbor nodes */}
+      {neighbors.map((n, i) => (
+        <g key={i} onClick={() => n.id && navigate(`/graph/${n.id}`)} className="cursor-pointer">
+          <circle cx={n.x} cy={n.y} r="14" fill="rgba(255,255,255,0.03)" stroke="rgba(255,255,255,0.1)" strokeWidth="1" />
+          <text x={n.x} y={n.y - 2} textAnchor="middle" dominantBaseline="middle" fill="rgba(255,255,255,0.6)" fontSize="5.5">
+            {n.label.length > 10 ? n.label.slice(0, 8) + ".." : n.label}
+          </text>
+          <text x={n.x} y={n.y + 6} textAnchor="middle" fill="rgba(255,255,255,0.25)" fontSize="4">
+            {n.type}
+          </text>
+        </g>
+      ))}
+    </svg>
+  );
+}
+
 export default function NodeDetail() {
   const [, navigate] = useLocation();
   const [, params] = useRoute("/graph/:id");
@@ -50,6 +101,8 @@ export default function NodeDetail() {
   const [skills, setSkills] = useState<any[]>([]);
   const [executions, setExecutions] = useState<any[]>([]);
   const [executing, setExecuting] = useState(false);
+  const [toolModal, setToolModal] = useState<{ name: string; tool: string; icon: string } | null>(null);
+  const [toolInput, setToolInput] = useState("");
 
   useEffect(() => {
     if (!nodeId) return;
@@ -169,6 +222,16 @@ export default function NodeDetail() {
             <div className="flex justify-between"><span className="text-muted-foreground">Created</span><span>{node.createdAt?.slice(0, 10)}</span></div>
           </div>
         </motion.div>
+
+        {/* ── Graph Visualization ────────────────────── */}
+        {(edges.outgoing?.length > 0 || edges.incoming?.length > 0) && (
+          <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.08 }} className="mb-6">
+            <h2 className="text-xs text-muted-foreground/60 tracking-widest uppercase mb-3">Graph</h2>
+            <div className="glass rounded-xl p-4">
+              <MiniGraph node={node} edges={edges} />
+            </div>
+          </motion.div>
+        )}
 
         {/* ── Tasks (progress) ────────────────────────── */}
         {tasks.length > 0 && (
@@ -298,20 +361,7 @@ export default function NodeDetail() {
                 { name: "Open URL", tool: "open_url", icon: "🌐", desc: "default browser" },
                 { name: "Run Code", tool: "run_code", icon: "💻", desc: "sandboxed JS" },
               ].map(t => (
-                <button key={t.tool} onClick={async () => {
-                  const input = window.prompt(`${t.name} — enter details:`);
-                  if (!input) return;
-                  setExecuting(true);
-                  toast.success(`Running ${t.name}...`);
-                  try {
-                    await fetch(`/api/graph/nodes/${nodeId}/ask`, {
-                      method: "POST", headers: { "Content-Type": "application/json" },
-                      body: JSON.stringify({ message: `Use the ${t.tool} tool for "${node.label}": ${input}` }),
-                    });
-                    toast.success(`${t.name} complete`);
-                  } catch { toast.error("Failed"); }
-                  setExecuting(false);
-                }}
+                <button key={t.tool} onClick={() => { setToolModal({ name: t.name, tool: t.tool, icon: t.icon }); setToolInput(""); }}
                   disabled={executing}
                   className="flex items-center gap-2 glass rounded-lg px-3 py-2 text-xs hover:bg-white/[0.03] disabled:opacity-50">
                   <span>{t.icon}</span>
@@ -322,6 +372,60 @@ export default function NodeDetail() {
                 </button>
               ))}
             </div>
+
+            {/* Tool Input Modal */}
+            {toolModal && (
+              <motion.div initial={{ opacity: 0, y: 5 }} animate={{ opacity: 1, y: 0 }} className="mt-3 p-3 border border-primary/20 rounded-lg bg-background/80">
+                <div className="flex items-center gap-2 mb-2">
+                  <span>{toolModal.icon}</span>
+                  <span className="text-xs font-medium text-foreground">{toolModal.name}</span>
+                  <button onClick={() => setToolModal(null)} className="ml-auto text-muted-foreground hover:text-foreground">
+                    <X className="h-3 w-3" />
+                  </button>
+                </div>
+                <div className="flex gap-2">
+                  <input
+                    value={toolInput}
+                    onChange={(e) => setToolInput(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter" && toolInput.trim()) {
+                        setExecuting(true);
+                        setToolModal(null);
+                        toast.success(`Running ${toolModal.name}...`);
+                        fetch(`/api/graph/nodes/${nodeId}/ask`, {
+                          method: "POST", headers: { "Content-Type": "application/json" },
+                          body: JSON.stringify({ message: `Use the ${toolModal.tool} tool for "${node.label}": ${toolInput}` }),
+                        }).then(() => toast.success(`${toolModal.name} complete`))
+                          .catch(() => toast.error("Failed"))
+                          .finally(() => setExecuting(false));
+                      }
+                    }}
+                    placeholder={`Details for ${toolModal.name}...`}
+                    autoFocus
+                    className="flex-1 bg-transparent text-sm text-foreground placeholder:text-muted-foreground/30 focus:outline-none glass rounded-lg px-3 py-2"
+                  />
+                  <button
+                    onClick={() => {
+                      if (!toolInput.trim()) return;
+                      setExecuting(true);
+                      const modal = toolModal;
+                      setToolModal(null);
+                      toast.success(`Running ${modal.name}...`);
+                      fetch(`/api/graph/nodes/${nodeId}/ask`, {
+                        method: "POST", headers: { "Content-Type": "application/json" },
+                        body: JSON.stringify({ message: `Use the ${modal.tool} tool for "${node.label}": ${toolInput}` }),
+                      }).then(() => toast.success(`${modal.name} complete`))
+                        .catch(() => toast.error("Failed"))
+                        .finally(() => setExecuting(false));
+                    }}
+                    disabled={!toolInput.trim() || executing}
+                    className="px-3 py-2 rounded-lg bg-primary text-primary-foreground text-xs font-medium hover:bg-primary/90 disabled:opacity-50"
+                  >
+                    <Send className="h-3 w-3" />
+                  </button>
+                </div>
+              </motion.div>
+            )}
 
             {/* Recent executions for this node */}
             {executions.length > 0 && (

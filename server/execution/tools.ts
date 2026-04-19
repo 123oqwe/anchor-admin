@@ -16,15 +16,10 @@
  */
 import { execSync } from "child_process";
 import { registerTool, type ToolResult } from "./registry.js";
-import { db, DEFAULT_USER_ID } from "../infra/storage/db.js";
+import { db, DEFAULT_USER_ID, logExecution } from "../infra/storage/db.js";
 import { bus } from "../orchestration/bus.js";
 import { nanoid } from "nanoid";
 import { writeMemory } from "../memory/retrieval.js";
-
-function log(agent: string, action: string, status = "success") {
-  db.prepare("INSERT INTO agent_executions (id, user_id, agent, action, status) VALUES (?,?,?,?,?)")
-    .run(nanoid(), DEFAULT_USER_ID, agent, action, status);
-}
 
 /** Run AppleScript safely. Returns output string or null on failure. */
 function runAppleScript(script: string): string | null {
@@ -146,7 +141,7 @@ end tell`;
           runAppleScript(`open location "mailto:${input.to}?subject=${encodeURIComponent(input.subject)}&body=${encodeURIComponent(input.body)}"`);
           return { success: true, output: `Mail.app opened with draft to ${input.to}. Please click Send.` };
         }
-        log("Execution Agent", `Email sent to ${input.to}: ${input.subject}`);
+        logExecution("Execution Agent", `Email sent to ${input.to}: ${input.subject}`);
         return { success: true, output: `Email sent to ${input.to}: "${input.subject}"` };
       } catch (err: any) {
         // Ultimate fallback — open mailto link in default mail client
@@ -200,7 +195,7 @@ end tell`;
         if (result === null) {
           return { success: false, output: "Calendar permission denied. Grant access in System Settings → Privacy → Calendar." };
         }
-        log("Execution Agent", `Calendar event: ${input.title} on ${input.date}`);
+        logExecution("Execution Agent", `Calendar event: ${input.title} on ${input.date}`);
         return { success: true, output: `Event "${input.title}" created on ${input.date} at ${time} (${duration}min).` };
       } catch (err: any) {
         return { success: false, output: `Calendar error: ${err.message}`, error: err.message };

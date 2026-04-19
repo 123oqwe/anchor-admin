@@ -62,7 +62,7 @@ export function detectSkillMatch(
 
     // Check context conditions
     let contextConditions: Record<string, any> = {};
-    try { contextConditions = JSON.parse(skill.context_conditions || "{}"); } catch {}
+    try { contextConditions = JSON.parse(skill.context_conditions || "{}"); } catch (err) { console.error("[Skills] Failed to parse context_conditions for skill:", skill.id); }
 
     let contextMatch = true;
     if (contextConditions.energy_above && userState.energy < contextConditions.energy_above) contextMatch = false;
@@ -166,7 +166,8 @@ Respond ONLY with JSON (no markdown): {"steps": ["adapted step 1", "adapted step
         confidence: match.confidence,
       },
     };
-  } catch {
+  } catch (err) {
+    console.error("[Skills] Skill adaptation failed:", err);
     // Fallback: use raw skill steps without adaptation
     return {
       raw: `Using skill "${match.name}": ${match.steps.join(", ")}`,
@@ -253,7 +254,8 @@ If no pattern: {"detected": false}`,
 
     console.log(`[Skills] Crystallized new skill: "${parsed.name}" (${parsed.steps.length} steps)`);
     return skillId;
-  } catch {
+  } catch (err) {
+    console.error("[Skills] Crystallization failed:", err);
     return null;
   }
 }

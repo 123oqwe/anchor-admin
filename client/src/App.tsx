@@ -23,6 +23,7 @@ import Costs from "./pages/admin/Costs";
 import Performance from "./pages/admin/Performance";
 import GraphAdmin from "./pages/admin/Graph";
 import MemoryAdmin from "./pages/admin/Memory";
+import Health from "./pages/admin/Health";
 
 function Router() {
   return (
@@ -35,6 +36,7 @@ function Router() {
       <Route path="/admin/graph"><AdminLayout><GraphAdmin /></AdminLayout></Route>
       <Route path="/admin/memory"><AdminLayout><MemoryAdmin /></AdminLayout></Route>
       <Route path="/admin/data"><AdminLayout><Data /></AdminLayout></Route>
+      <Route path="/admin/health"><AdminLayout><Health /></AdminLayout></Route>
 
       {/* Onboarding — skip if already completed */}
       <Route path="/">

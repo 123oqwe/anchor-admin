@@ -15,13 +15,7 @@
  * Key insight: this engine does NOT require an LLM call to run.
  * It's pure statistical analysis of existing telemetry data.
  */
-import { db, DEFAULT_USER_ID } from "../infra/storage/db.js";
-import { nanoid } from "nanoid";
-
-function log(agent: string, action: string, status = "success") {
-  db.prepare("INSERT INTO agent_executions (id, user_id, agent, action, status) VALUES (?,?,?,?,?)")
-    .run(nanoid(), DEFAULT_USER_ID, agent, action, status);
-}
+import { db, logExecution } from "../infra/storage/db.js";
 
 // ── Step 1: Trace Capture ──────────────────────────────────────────────────
 
@@ -228,7 +222,7 @@ function applyRecommendations(recommendations: RoutingRecommendation[]): number 
         "INSERT OR REPLACE INTO route_overrides (task, model_id, updated_at) VALUES (?,?,datetime('now'))"
       ).run(rec.task, rec.recommendedModel);
 
-      log("System Evolution", `Route ${rec.task}: ${rec.currentModel} → ${rec.recommendedModel} (${rec.reason})`);
+      logExecution("System Evolution", `Route ${rec.task}: ${rec.currentModel} → ${rec.recommendedModel} (${rec.reason})`);
       applied++;
     }
   }
@@ -275,7 +269,7 @@ export async function runSystemEvolution(): Promise<{
   };
 
   if (routesUpdated > 0) {
-    log("System Evolution", `Optimized ${routesUpdated} routes. ${recommendations.length} recommendations from ${stats.tracesAnalyzed} traces.`);
+    logExecution("System Evolution", `Optimized ${routesUpdated} routes. ${recommendations.length} recommendations from ${stats.tracesAnalyzed} traces.`);
   }
 
   console.log(`[System Evolution] Complete: ${stats.tracesAnalyzed} traces, ${stats.tasksEvaluated} tasks, ${routesUpdated} routes updated.`);

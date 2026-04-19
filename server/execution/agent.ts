@@ -11,17 +11,12 @@
  */
 import Anthropic from "@anthropic-ai/sdk";
 import { nanoid } from "nanoid";
-import { db, DEFAULT_USER_ID } from "../infra/storage/db.js";
+import { db, DEFAULT_USER_ID, logExecution } from "../infra/storage/db.js";
 import { bus, type EditableStep } from "../orchestration/bus.js";
 import { routeTask } from "../infra/compute/router.js";
 import { getApiKey } from "../infra/compute/keys.js";
 import { getAllTools, executeTool, getToolsForLLM, type ToolResult, type ExecutionContext } from "./registry.js";
 import { shouldUseSwarm, planExecution, runExecutionSwarm } from "./swarm.js";
-
-function log(agent: string, action: string, status = "success") {
-  db.prepare("INSERT INTO agent_executions (id, user_id, agent, action, status) VALUES (?,?,?,?,?)")
-    .run(nanoid(), DEFAULT_USER_ID, agent, action, status);
-}
 
 // ── Checkpoint ──────────────────────────────────────────────────────────────
 
@@ -39,7 +34,7 @@ export async function runExecutionReAct(steps: EditableStep[]) {
   // Route: 3+ steps → Execution Swarm (parallel phases), 1-2 steps → sequential ReAct
   if (shouldUseSwarm(steps)) {
     console.log(`[Execution Agent] ${steps.length} steps → routing to Execution Swarm`);
-    log("Execution Agent", `Swarm mode: ${steps.length} steps`);
+    logExecution("Execution Agent", `Swarm mode: ${steps.length} steps`);
     try {
       const plan = await planExecution(steps);
       const swarmResult = await runExecutionSwarm(plan);
@@ -61,7 +56,7 @@ export async function runExecutionReAct(steps: EditableStep[]) {
   }
 
   console.log(`[Execution Agent] ReAct starting with ${steps.length} steps...`);
-  log("Execution Agent", `ReAct: ${steps.length} steps`);
+  logExecution("Execution Agent", `ReAct: ${steps.length} steps`);
 
   const { model: routedModel } = routeTask("react_execution");
   const modelId = routedModel.id;
@@ -69,7 +64,7 @@ export async function runExecutionReAct(steps: EditableStep[]) {
 
   const apiKey = getApiKey(routedModel.provider);
   if (!apiKey) {
-    log("Execution Agent", "No API key for execution model", "failed");
+    logExecution("Execution Agent", "No API key for execution model", "failed");
     bus.publish({ type: "EXECUTION_DONE", payload: { steps_result: [], plan_summary: steps.map(s => s.content).join("; ") } });
     return;
   }
@@ -162,7 +157,7 @@ Available tools: ${toolDefs.map(t => t.name).join(", ")}`,
 
     const successCount = stepsResult.filter(r => r.status === "done").length;
     const errorCount = stepsResult.filter(r => r.status === "error").length;
-    log("Execution Agent", `ReAct done: ${successCount} success, ${errorCount} errors, ${stepsResult.length} total`);
+    logExecution("Execution Agent", `ReAct done: ${successCount} success, ${errorCount} errors, ${stepsResult.length} total`);
     console.log(`[Execution Agent] ReAct done. ${successCount}/${stepsResult.length} successful.`);
 
     bus.publish({
@@ -174,7 +169,7 @@ Available tools: ${toolDefs.map(t => t.name).join(", ")}`,
     });
   } catch (err: any) {
     console.error("[Execution Agent] ReAct error:", err.message);
-    log("Execution Agent", `ReAct failed: ${err.message}`, "failed");
+    logExecution("Execution Agent", `ReAct failed: ${err.message}`, "failed");
 
     // Emit partial results even on failure
     if (stepsResult.length > 0) {

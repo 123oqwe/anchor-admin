@@ -3,7 +3,7 @@
  * Thin HTTP boundary. All business logic delegated to L3 cognition, L2 memory, L4 orchestration.
  */
 import { Router, Request, Response } from "express";
-import { db, DEFAULT_USER_ID } from "../infra/storage/db.js";
+import { db, DEFAULT_USER_ID, logExecution } from "../infra/storage/db.js";
 import { nanoid } from "nanoid";
 import { z } from "zod";
 import { bus, type EditableStep, type StepChange } from "../orchestration/bus.js";
@@ -52,11 +52,6 @@ function extractConversationTags(message: string): string[] {
     if (keywords.some(kw => lower.includes(kw))) tags.push(tag);
   }
   return tags.length > 0 ? tags : ["general"];
-}
-
-function logExecution(agent: string, action: string, status = "success") {
-  db.prepare("INSERT INTO agent_executions (id, user_id, agent, action, status) VALUES (?,?,?,?,?)")
-    .run(nanoid(), DEFAULT_USER_ID, agent, action, status);
 }
 
 // ── GET history ──────────────────────────────────────────────────────────────
@@ -240,7 +235,7 @@ router.post("/confirm", async (req: Request, res: Response) => {
         }
       }
     }
-  } catch {}
+  } catch (e) { console.error("[Advisor] Skill evolution failed:", e); }
 
   res.json({ ok: true, changes });
 });
@@ -274,7 +269,7 @@ router.post("/reject", (req: Request, res: Response) => {
         }
       }
     }
-  } catch {}
+  } catch (e) { console.error("[Advisor] Skill penalization failed:", e); }
 
   logExecution("Decision Agent", `Plan rejected: ${stepSummary.slice(0, 60)}`);
   res.json({ ok: true });

@@ -18,14 +18,9 @@
  *   - domain_weights: JSON of relative domain importance
  *   - time_preference: JSON of active hours / preferred task timing
  */
-import { db, DEFAULT_USER_ID } from "../infra/storage/db.js";
+import { db, DEFAULT_USER_ID, logExecution } from "../infra/storage/db.js";
 import { nanoid } from "nanoid";
 import { text } from "../infra/compute/index.js";
-
-function log(agent: string, action: string, status = "success") {
-  db.prepare("INSERT INTO agent_executions (id, user_id, agent, action, status) VALUES (?,?,?,?,?)")
-    .run(nanoid(), DEFAULT_USER_ID, agent, action, status);
-}
 
 // ── Dimension read/write ───────────────────────────────────────────────────
 
@@ -229,7 +224,7 @@ function updateAndAdjust(
     try {
       const hour = new Date(e.created_at).getHours();
       hourCounts[hour] = (hourCounts[hour] || 0) + 1;
-    } catch {}
+    } catch (e) { console.error("[Evolution] Failed to parse date:", e); }
   }
 
   if (Object.keys(hourCounts).length >= 3) {
@@ -287,7 +282,7 @@ export function getPromptAdaptations(): string {
         const topDomains = sorted.slice(0, 3).map(([d]) => d).join(", ");
         adaptations.push(`ADAPTATION: Prioritize ${topDomains} — these are the user's most active domains.`);
       }
-    } catch {}
+    } catch (e) { console.error("[Evolution] Failed to parse domain_weights:", e); }
   }
 
   if (adaptations.length === 0) return "";
@@ -329,7 +324,7 @@ export async function runPersonalEvolution(): Promise<{
   }
 
   if (updated.length > 0) {
-    log("Evolution Engine", `Adapted ${updated.length} dimensions: ${updated.join(", ")}`);
+    logExecution("Evolution Engine", `Adapted ${updated.length} dimensions: ${updated.join(", ")}`);
     console.log(`[Evolution] Updated: ${updated.join(", ")}`);
   } else {
     console.log("[Evolution] No changes needed.");

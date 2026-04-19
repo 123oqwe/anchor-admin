@@ -3,18 +3,13 @@
  *
  * Flow: getFreshAccessToken → adapters.fetchSince → batch events → extractFromText → log results
  */
-import { db, DEFAULT_USER_ID } from "../infra/storage/db.js";
+import { db, logExecution } from "../infra/storage/db.js";
 import { nanoid } from "nanoid";
 import { getFreshAccessToken, isConnected } from "./token-store.js";
 import { gmailAdapter } from "./adapters/gmail.js";
 import { calendarAdapter } from "./adapters/calendar.js";
 import { extractFromText } from "../cognition/extractor.js";
 import type { IngestionEvent } from "./types.js";
-
-function log(agent: string, action: string, status = "success") {
-  db.prepare("INSERT INTO agent_executions (id, user_id, agent, action, status) VALUES (?,?,?,?,?)")
-    .run(nanoid(), DEFAULT_USER_ID, agent, action, status);
-}
 
 export async function runIngestion(
   userId: string,
@@ -96,7 +91,7 @@ export async function runIngestion(
       "UPDATE ingestion_log SET status='done', events_fetched=?, nodes_created=?, finished_at=datetime('now') WHERE id=?"
     ).run(totalFetched, nodesCreated, logId);
 
-    log("Ingestion Pipeline", `${runType}: ${totalFetched} events → ${nodesCreated} new nodes`);
+    logExecution("Ingestion Pipeline", `${runType}: ${totalFetched} events → ${nodesCreated} new nodes`);
     console.log(`[Ingestion] Done: ${totalFetched} events → ${nodesCreated} new nodes`);
 
     return { eventsFetched: totalFetched, nodesCreated };
@@ -104,7 +99,7 @@ export async function runIngestion(
     console.error("[Ingestion] Pipeline error:", err.message);
     db.prepare("UPDATE ingestion_log SET status='failed', error=?, finished_at=datetime('now') WHERE id=?")
       .run(err.message?.slice(0, 500), logId);
-    log("Ingestion Pipeline", `${runType} failed: ${err.message}`, "failed");
+    logExecution("Ingestion Pipeline", `${runType} failed: ${err.message}`, "failed");
     return null;
   }
 }

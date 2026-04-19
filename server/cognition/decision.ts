@@ -93,6 +93,36 @@ function buildValueConstitution(): string {
   return lines.join("\n");
 }
 
+// ── Intent Classification (local, no LLM) ─────────────────────────────────
+type Intent = "greeting" | "info_query" | "decision_request" | "execution_command" | "conversation";
+
+function classifyIntent(message: string): Intent {
+  const lower = message.toLowerCase().trim();
+  const words = lower.split(/\s+/);
+
+  // Greetings — no pipeline needed
+  if (words.length <= 3 && /^(hi|hello|hey|sup|yo|good morning|good evening|good night|thanks|thank you|ok|okay|sure|got it|cool|nice|great)/.test(lower)) {
+    return "greeting";
+  }
+
+  // Execution commands — skip analysis, go straight to execution
+  if (/^(send|email|create|schedule|open|search|remind|call|book|set up|draft)\b/.test(lower)) {
+    return "execution_command";
+  }
+
+  // Decision requests — full pipeline
+  if (/\b(should i|what should|how should|decide|prioritize|which|trade-?off|recommend|best approach|what do you think)\b/.test(lower)) {
+    return "decision_request";
+  }
+
+  // Info queries — light pipeline
+  if (/\b(what is|who is|when|where|how many|show me|list|status|tell me about|explain)\b/.test(lower)) {
+    return "info_query";
+  }
+
+  return "conversation";
+}
+
 const DECISION_SYSTEM_PROMPT = `You are Anchor's Decision Agent. You reason through a strict 5-stage pipeline.
 
 {STATE}
@@ -171,6 +201,24 @@ export async function decide(
     return cached;
   }
 
+  // Intent classification — skip heavy pipeline for simple messages
+  const intent = classifyIntent(message);
+
+  if (intent === "greeting") {
+    const greetings = [
+      "Hey! What's on your mind?",
+      "Hi there. What are you thinking about?",
+      "Hello! Ready when you are.",
+      "Hey. What can I help you with?",
+    ];
+    const result: DecisionResult = {
+      raw: greetings[Math.floor(Math.random() * greetings.length)],
+      isPlan: false,
+      packet: null,
+    };
+    return result;
+  }
+
   // Sparse data detection: when data is thin, run 5-agent micro-analysis
   // instead of full pipeline. Tag kept for metrics — but NEVER blocks output.
   const nodeCount = (db.prepare("SELECT COUNT(*) as c FROM graph_nodes WHERE user_id=?").get(DEFAULT_USER_ID) as any)?.c ?? 0;
@@ -183,8 +231,9 @@ export async function decide(
       const analysis = await runSparseAnalysis();
       const raw = analysis.synthesizedInsight || "Tell me about yourself and I'll start building your world.";
       return { raw, isPlan: false, packet: null };
-    } catch {
-      // Sparse analysis failed — fall through to normal pipeline
+    } catch (err) {
+      console.error("[Decision Agent] Sparse analysis failed:", err);
+      // fall through to normal pipeline
     }
   }
 
@@ -266,7 +315,7 @@ export async function decide(
         detectFailures(packet, message);
       }
     }
-  } catch (e) { /* JSON parse failed, return plain text */ }
+  } catch (e) { console.error("[Decision Agent] JSON parse failed:", e); }
 
   // Check if Swarm should be activated for complex decisions
   if (packet && packet.type === "plan") {

@@ -5,15 +5,9 @@
  *
  * Uses L1 Graph (writer) and L2 Memory (retrieval) — no raw DB.
  */
-import { nanoid } from "nanoid";
-import { db, DEFAULT_USER_ID } from "../infra/storage/db.js";
+import { db, DEFAULT_USER_ID, logExecution } from "../infra/storage/db.js";
 import { writeMemory } from "../memory/retrieval.js";
 import { unlockBlockedNodes } from "../graph/writer.js";
-
-function log(agent: string, action: string, status = "success") {
-  db.prepare("INSERT INTO agent_executions (id, user_id, agent, action, status) VALUES (?,?,?,?,?)")
-    .run(nanoid(), DEFAULT_USER_ID, agent, action, status);
-}
 
 export function persistInsightAsSemanticMemory(insight: string) {
   // Use first phrase of insight as title to avoid duplicate generic titles
@@ -26,7 +20,7 @@ export function persistInsightAsSemanticMemory(insight: string) {
     source: "Twin Agent",
     confidence: 0.75,
   });
-  log("Memory Agent", "Semantic memory stored");
+  logExecution("Memory Agent", "Semantic memory stored");
 }
 
 export function recordGraphChange(nodeId: string, status: string, label: string) {
@@ -39,7 +33,7 @@ export function recordGraphChange(nodeId: string, status: string, label: string)
     confidence: 0.95,
   });
   const unblocked = unlockBlockedNodes();
-  log("Observation Agent", `Graph: "${label}" → ${status}${unblocked > 0 ? `, ${unblocked} unblocked` : ""}`);
+  logExecution("Observation Agent", `Graph: "${label}" → ${status}${unblocked > 0 ? `, ${unblocked} unblocked` : ""}`);
 }
 
 export function grantTaskCompletionXp(title: string) {
@@ -48,5 +42,5 @@ export function grantTaskCompletionXp(title: string) {
   const newXp = evo.xp + 5;
   db.prepare("UPDATE twin_evolution SET xp=?, level=?, updated_at=datetime('now') WHERE user_id=?")
     .run(newXp, Math.min(4, Math.floor(newXp / 100) + 1), DEFAULT_USER_ID);
-  log("Twin Agent", `+5 XP: "${title.slice(0, 40)}"`);
+  logExecution("Twin Agent", `+5 XP: "${title.slice(0, 40)}"`);
 }

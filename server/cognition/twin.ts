@@ -14,17 +14,11 @@
  *
  * Pure cognition — no orchestration, no execution.
  */
-import { nanoid } from "nanoid";
-import { db, DEFAULT_USER_ID } from "../infra/storage/db.js";
+import { db, DEFAULT_USER_ID, logExecution } from "../infra/storage/db.js";
 import { bus, type StepChange } from "../orchestration/bus.js";
 import { text } from "../infra/compute/index.js";
 import { writeMemory, writeTwinInsight, writeDialecticInsight } from "../memory/retrieval.js";
 import { createNode } from "../graph/writer.js";
-
-function log(agent: string, action: string, status = "success") {
-  db.prepare("INSERT INTO agent_executions (id, user_id, agent, action, status) VALUES (?,?,?,?,?)")
-    .run(nanoid(), DEFAULT_USER_ID, agent, action, status);
-}
 
 // ── 1. Learn from user edits ────────────────────────────────────────────────
 
@@ -68,7 +62,7 @@ Example: user always deletes "schedule a call" → contraindication: "Do not sug
       // Contraindication → write to graph as a constraint
       if (parsed.contraindication) {
         createNode({ domain: "growth", label: `Avoid: ${parsed.contraindication.slice(0, 30)}`, type: "constraint", status: "active", captured: "Twin contraindication", detail: parsed.contraindication });
-        log("Twin Agent", `Contraindication: ${parsed.contraindication.slice(0, 50)}`);
+        logExecution("Twin Agent", `Contraindication: ${parsed.contraindication.slice(0, 50)}`);
       }
 
       // Dialectic detection
@@ -79,12 +73,12 @@ Example: user always deletes "schedule a call" → contraindication: "Do not sug
         }
       }
 
-      log("Twin Agent", `Edit insight: ${parsed.insight.slice(0, 60)}`);
+      logExecution("Twin Agent", `Edit insight: ${parsed.insight.slice(0, 60)}`);
       bus.publish({ type: "TWIN_UPDATED", payload: { insight: parsed.insight } });
     }
   } catch (err: any) {
     console.error("[Twin Sidecar] Error:", err.message);
-    log("Twin Agent", `Edit learning failed: ${err.message}`, "failed");
+    logExecution("Twin Agent", `Edit learning failed: ${err.message}`, "failed");
   }
 }
 
@@ -110,12 +104,12 @@ Respond ONLY with JSON: {"category":"string","insight":"string","confidence":0.0
     if (parsed?.insight) {
       writeTwinInsight({ category: parsed.category ?? "behavior", insight: parsed.insight, confidence: parsed.confidence ?? 0.7 });
       writeMemory({ type: "episodic", title: "Execution Result", content: `Plan: ${payload.plan_summary}. ${payload.steps_result.length} steps.`, tags: ["execution", "result"], source: "Execution Agent", confidence: 0.9 });
-      log("Twin Agent", `Result insight: ${parsed.insight.slice(0, 60)}`);
+      logExecution("Twin Agent", `Result insight: ${parsed.insight.slice(0, 60)}`);
       bus.publish({ type: "TWIN_UPDATED", payload: { insight: parsed.insight } });
     }
   } catch (err: any) {
     console.error("[Twin Agent] Error:", err.message);
-    log("Twin Agent", `Result learning failed: ${err.message}`, "failed");
+    logExecution("Twin Agent", `Result learning failed: ${err.message}`, "failed");
   }
 }
 
@@ -146,7 +140,7 @@ export function trackPlanDecision(action: "confirmed" | "rejected", stepSummary:
       insight: `User rejects more than half of suggested plans. System may be misaligned with user preferences. Recent rejection rate: ${rejections.length}/${total}.`,
       confidence: 0.85,
     });
-    log("Twin Agent", `High rejection rate detected: ${rejections.length}/${total}`);
+    logExecution("Twin Agent", `High rejection rate detected: ${rejections.length}/${total}`);
   }
 }
 
@@ -203,7 +197,7 @@ Respond ONLY with JSON:
         captured: "Twin drift detection",
         detail: `Old: ${parsed.old_pattern}. New: ${parsed.new_pattern}.`,
       });
-      log("Twin Agent", `Drift detected: ${parsed.drift_description.slice(0, 60)}`);
+      logExecution("Twin Agent", `Drift detected: ${parsed.drift_description.slice(0, 60)}`);
     }
   } catch (err: any) {
     console.error("[Twin Agent] Drift detection error:", err.message);
@@ -250,8 +244,8 @@ export async function evaluateDecisionOutcome(
       insight: `Decision quality declining: ${poorCount} of last ${recentOutcomes.length} decisions had poor outcomes. System may need to recalibrate its recommendation strategy.`,
       confidence: 0.8,
     });
-    log("Twin Agent", `Decision quality declining: ${poorCount}/${recentOutcomes.length} poor`);
+    logExecution("Twin Agent", `Decision quality declining: ${poorCount}/${recentOutcomes.length} poor`);
   }
 
-  log("Twin Agent", `Outcome tracked: ${successCount}/${total} success`);
+  logExecution("Twin Agent", `Outcome tracked: ${successCount}/${total} success`);
 }

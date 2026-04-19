@@ -12,16 +12,11 @@
  * 5. Skill creation — complex execution patterns → reusable skill docs
  * 6. Capacity enforcement — keep total under MAX_MEMORIES
  */
-import { db, DEFAULT_USER_ID } from "../infra/storage/db.js";
+import { db, DEFAULT_USER_ID, logExecution } from "../infra/storage/db.js";
 import { nanoid } from "nanoid";
 import { text } from "../infra/compute/index.js";
 
 const MAX_MEMORIES = 200;
-
-function log(agent: string, action: string, status = "success") {
-  db.prepare("INSERT INTO agent_executions (id, user_id, agent, action, status) VALUES (?,?,?,?,?)")
-    .run(nanoid(), DEFAULT_USER_ID, agent, action, status);
-}
 
 // ── 1. Prune stale memories ─────────────────────────────────────────────────
 
@@ -290,7 +285,7 @@ export async function runDream(): Promise<{
     "INSERT INTO dream_log (id, pruned, merged, promoted, contradictions, skills_created) VALUES (?,?,?,?,?,?)"
   ).run(nanoid(), pruned, contradictions, promoted, contradictions, skillsCreated);
 
-  log("Dream Engine", `Dream complete: pruned=${pruned} merged=${contradictions} promoted=${promoted} skills=${skillsCreated} normalized=${timeNormalized} capacity=${capacityRemoved}`);
+  logExecution("Dream Engine", `Dream complete: pruned=${pruned} merged=${contradictions} promoted=${promoted} skills=${skillsCreated} normalized=${timeNormalized} capacity=${capacityRemoved}`);
   console.log(`[Dream] Complete: pruned=${pruned}, merged=${contradictions}, promoted=${promoted}, skills=${skillsCreated}, time=${timeNormalized}, capacity=${capacityRemoved}`);
 
   return stats;

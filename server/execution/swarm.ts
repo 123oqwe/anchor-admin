@@ -14,14 +14,8 @@
  */
 import { type EditableStep } from "../orchestration/bus.js";
 import { executeTool, getAllTools, type ToolResult, type ExecutionContext } from "./registry.js";
-import { nanoid } from "nanoid";
-import { db, DEFAULT_USER_ID } from "../infra/storage/db.js";
+import { logExecution } from "../infra/storage/db.js";
 import { text } from "../infra/compute/index.js";
-
-function log(agent: string, action: string, status = "success") {
-  db.prepare("INSERT INTO agent_executions (id, user_id, agent, action, status) VALUES (?,?,?,?,?)")
-    .run(nanoid(), DEFAULT_USER_ID, agent, action, status);
-}
 
 // ── Dependency analysis ─────────────────────────────────────────────────────
 
@@ -144,7 +138,7 @@ export interface SwarmResult {
  */
 export async function runExecutionSwarm(plan: ExecutionPlan): Promise<SwarmResult> {
   console.log(`[Execution Swarm] ${plan.phases.length} phases, ${plan.phases.reduce((s, p) => s + p.steps.length, 0)} total steps`);
-  log("Execution Swarm", `Starting: ${plan.phases.length} phases`);
+  logExecution("Execution Swarm", `Starting: ${plan.phases.length} phases`);
 
   const phaseResults: SwarmResult["phases"] = [];
   const allPreviousResults: { toolName: string; output: string; data?: any }[] = [];
@@ -203,7 +197,7 @@ export async function runExecutionSwarm(plan: ExecutionPlan): Promise<SwarmResul
     });
   }
 
-  log("Execution Swarm", `Complete: ${totalSuccess} success, ${totalFailed} failed across ${plan.phases.length} phases`);
+  logExecution("Execution Swarm", `Complete: ${totalSuccess} success, ${totalFailed} failed across ${plan.phases.length} phases`);
   console.log(`[Execution Swarm] Done: ${totalSuccess}/${totalSuccess + totalFailed} successful`);
 
   return { phases: phaseResults, totalSuccess, totalFailed, totalSteps: totalSuccess + totalFailed };

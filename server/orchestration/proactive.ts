@@ -13,7 +13,7 @@
  *
  * All notifications go through bus → WebSocket → frontend toast.
  */
-import { db, DEFAULT_USER_ID } from "../infra/storage/db.js";
+import { db, DEFAULT_USER_ID, logExecution } from "../infra/storage/db.js";
 import { nanoid } from "nanoid";
 import { bus } from "./bus.js";
 import { relationshipHealth, healthToStatus } from "../graph/math/decay.js";
@@ -30,11 +30,6 @@ export interface ProactiveNotification {
   };
   priority: "high" | "medium" | "low";
   createdAt: string;
-}
-
-function log(agent: string, action: string, status = "success") {
-  db.prepare("INSERT INTO agent_executions (id, user_id, agent, action, status) VALUES (?,?,?,?,?)")
-    .run(nanoid(), DEFAULT_USER_ID, agent, action, status);
 }
 
 // ── Check 1: Relationship Decay ────────────────────────────────────────────
@@ -127,7 +122,7 @@ function checkOutcomeFollowups(): ProactiveNotification[] {
         priority: "medium",
         createdAt: new Date().toISOString(),
       });
-      log("Proactive", `outcome_followup:${d.id}`);
+      logExecution("Proactive", `outcome_followup:${d.id}`);
     }
   }
 
@@ -181,7 +176,7 @@ export function runProactiveChecks(): ProactiveNotification[] {
   }
 
   if (all.length > 0) {
-    log("Proactive", `${all.length} notifications: ${all.map(n => n.type).join(", ")}`);
+    logExecution("Proactive", `${all.length} notifications: ${all.map(n => n.type).join(", ")}`);
   }
 
   return all;

@@ -111,37 +111,56 @@ export default function Onboarding() {
       if (peakTime) await api.createNode({ domain: "growth", label: `Peak: ${peakTime}`, type: "preference", status: "stable", captured: "Onboarding", detail: `Productivity: ${peakTime}` });
       for (const v of values) await api.createNode({ domain: "growth", label: v, type: "value", status: "stable", captured: "Onboarding", detail: `Core value: ${v}` });
 
-      // Animate scan phases
-      for (let i = 0; i < SCAN_PHASES.length; i++) {
-        setScanPhase(i);
-        const phase = SCAN_PHASES[i];
-        const startProg = (i / SCAN_PHASES.length) * 100;
-        const endProg = ((i + 1) / SCAN_PHASES.length) * 100;
+      // Trigger the actual scan
+      await fetch("/api/integrations/local/onboarding-scan", { method: "POST" }).catch(() => {});
 
-        // Animate progress within this phase
-        const steps = 20;
-        for (let s = 0; s < steps; s++) {
-          await new Promise(r => setTimeout(r, phase.duration / steps));
-          setScanProgress(startProg + ((s + 1) / steps) * (endProg - startProg));
-        }
-      }
+      // Poll for real progress instead of fake animation
+      let lastTotal = 0;
+      let stableCount = 0;
+      const pollProgress = setInterval(async () => {
+        try {
+          const graph = await fetch("/api/graph").then(r => r.json());
+          const total = graph.totalNodes ?? 0;
 
-      setScanProgress(100);
+          // Update progress based on nodes found
+          const progress = Math.min(90, (total / 50) * 90);
+          setScanProgress(progress);
 
-      // Generate first insight — with 20s timeout so user doesn't wait forever
-      setScanPhase(SCAN_PHASES.length - 1); // show "Generating your first insight..."
-      try {
-        const insightPromise = api.getFirstInsight();
-        const timeoutPromise = new Promise((_, reject) => setTimeout(() => reject(new Error("timeout")), 20000));
-        const insight = await Promise.race([insightPromise, timeoutPromise]) as any;
-        setFirstInsight(insight.content?.slice(0, 400) ?? "Anchor is ready to help you make better decisions.");
-        setInsightConfidence(insight.packet?.confidenceScore ?? 0.85);
-      } catch {
-        setFirstInsight("Your Human Graph is ready. I've analyzed your data — head to Dashboard to see what I found.");
-        setInsightConfidence(0.8);
-      }
+          // Update phase based on what's happening
+          if (total > lastTotal) {
+            stableCount = 0;
+            if (total < 10) setScanPhase(0); // Building graph
+            else if (total < 30) setScanPhase(1); // Mapping relationships
+            else if (total < 50) setScanPhase(2); // Analyzing priorities
+            else setScanPhase(3); // Detecting patterns
+          } else {
+            stableCount++;
+          }
+          lastTotal = total;
 
-      setStep(7); // show insight
+          // If stable for 5 polls (15s) or total > 50, move to insight
+          if (stableCount >= 5 || total >= 50) {
+            clearInterval(pollProgress);
+            setScanProgress(95);
+            setScanPhase(4); // Generating insight
+
+            // Generate first insight with timeout
+            try {
+              const insightPromise = api.getFirstInsight();
+              const timeoutPromise = new Promise((_, reject) => setTimeout(() => reject(new Error("timeout")), 20000));
+              const insight = await Promise.race([insightPromise, timeoutPromise]) as any;
+              setFirstInsight(insight.content?.slice(0, 400) ?? "Anchor is ready to help you make better decisions.");
+              setInsightConfidence(insight.packet?.confidenceScore ?? 0.85);
+            } catch {
+              setFirstInsight("Your Human Graph is ready. I've analyzed your data — head to Dashboard to see what I found.");
+              setInsightConfidence(0.8);
+            }
+
+            setScanProgress(100);
+            setStep(7);
+          }
+        } catch {}
+      }, 3000);
     } catch {
       setSaving(false);
     }
