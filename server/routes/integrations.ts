@@ -6,7 +6,7 @@ import { db, DEFAULT_USER_ID } from "../infra/storage/db.js";
 import axios from "axios";
 import { saveTokens, getTokens, deleteTokens, isConnected } from "../integrations/token-store.js";
 import { runIngestion } from "../integrations/pipeline.js";
-import { runLocalScan, getLocalScanStatus } from "../integrations/local/index.js";
+import { runLocalScan, getLocalScanStatus, hasConsent, grantConsent, revokeConsent } from "../integrations/local/index.js";
 
 const router = Router();
 
@@ -16,23 +16,50 @@ router.get("/local/status", (_req, res) => {
   res.json(getLocalScanStatus());
 });
 
+// Grant consent — must be called before first scan (GDPR)
+router.post("/local/consent", (_req, res) => {
+  grantConsent(DEFAULT_USER_ID);
+  res.json({ ok: true, consented: true });
+});
+
+// Revoke consent — stops future scans
+router.delete("/local/consent", (_req, res) => {
+  revokeConsent(DEFAULT_USER_ID);
+  res.json({ ok: true, consented: false });
+});
+
+// Onboarding scan — grants consent + starts scan in one step
+// This is the "Allow — Scan My Data" button in Onboarding
+router.post("/local/onboarding-scan", async (_req, res) => {
+  grantConsent(DEFAULT_USER_ID);
+  const status = getLocalScanStatus();
+  res.json({ started: true, permissions: status.permissions, browsers: status.availableBrowsers });
+  runLocalScan().catch(err => console.error("[LocalScan] Onboarding scan error:", err.message));
+});
+
+// Full scan — requires consent
 router.post("/local/scan", async (_req, res) => {
+  if (!hasConsent(DEFAULT_USER_ID)) {
+    return res.status(403).json({ error: "Consent required. Call POST /api/integrations/local/consent first." });
+  }
   res.json({ started: true });
-  // Fire and forget — scan runs in background
   runLocalScan().catch(err => console.error("[LocalScan] Error:", err.message));
 });
 
 router.post("/local/scan/browser", async (_req, res) => {
+  if (!hasConsent(DEFAULT_USER_ID)) return res.status(403).json({ error: "Consent required" });
   res.json({ started: true });
   runLocalScan({ browser: true, contacts: false, calendar: false }).catch(() => {});
 });
 
 router.post("/local/scan/contacts", async (_req, res) => {
+  if (!hasConsent(DEFAULT_USER_ID)) return res.status(403).json({ error: "Consent required" });
   res.json({ started: true });
   runLocalScan({ browser: false, contacts: true, calendar: false }).catch(() => {});
 });
 
 router.post("/local/scan/calendar", async (_req, res) => {
+  if (!hasConsent(DEFAULT_USER_ID)) return res.status(403).json({ error: "Consent required" });
   res.json({ started: true });
   runLocalScan({ browser: false, contacts: false, calendar: true }).catch(() => {});
 });

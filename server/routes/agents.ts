@@ -1,6 +1,7 @@
 import { Router } from "express";
 import { db, DEFAULT_USER_ID } from "../infra/storage/db.js";
 import { nanoid } from "nanoid";
+import { generateSelfPortrait } from "../cognition/self-portrait.js";
 
 const router = Router();
 
@@ -26,6 +27,15 @@ router.post("/executions", (req, res) => {
   db.prepare("INSERT INTO agent_executions (id, user_id, agent, action, status) VALUES (?,?,?,?,?)")
     .run(id, DEFAULT_USER_ID, agent, action, status ?? "success");
   res.json({ id });
+});
+
+router.get("/self-portrait", async (_req, res) => {
+  try {
+    const portrait = await generateSelfPortrait();
+    res.json(portrait);
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
 });
 
 export default router;

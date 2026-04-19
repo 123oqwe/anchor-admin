@@ -18,6 +18,22 @@ function log(agent: string, action: string, status = "success") {
     .run(nanoid(), DEFAULT_USER_ID, agent, action, status);
 }
 
+// ── Consent Management ─────────────────────────────────────────────────────
+
+export function hasConsent(userId: string): boolean {
+  const consent = db.prepare("SELECT id FROM scan_consent WHERE user_id=? AND scope='local' AND revoked_at IS NULL").get(userId);
+  return !!consent;
+}
+
+export function grantConsent(userId: string): void {
+  db.prepare("UPDATE scan_consent SET revoked_at=datetime('now') WHERE user_id=? AND scope='local' AND revoked_at IS NULL").run(userId);
+  db.prepare("INSERT INTO scan_consent (id, user_id, scope, version) VALUES (?,?,?,?)").run(nanoid(), userId, "local", "1.0");
+}
+
+export function revokeConsent(userId: string): void {
+  db.prepare("UPDATE scan_consent SET revoked_at=datetime('now') WHERE user_id=? AND scope='local' AND revoked_at IS NULL").run(userId);
+}
+
 export interface LocalScanResult {
   browserEvents: number;
   contacts: number;

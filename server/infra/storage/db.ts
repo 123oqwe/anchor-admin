@@ -371,6 +371,15 @@ db.exec(`
   );
 
   CREATE INDEX IF NOT EXISTS idx_ingestion_user ON ingestion_log(user_id, source, started_at);
+
+  CREATE TABLE IF NOT EXISTS scan_consent (
+    id TEXT PRIMARY KEY,
+    user_id TEXT NOT NULL,
+    scope TEXT NOT NULL,
+    consented_at TEXT NOT NULL DEFAULT (datetime('now')),
+    revoked_at TEXT,
+    version TEXT NOT NULL DEFAULT '1.0'
+  );
 `);
 
 // ─── Default user seed ────────────────────────────────────────────────────────
