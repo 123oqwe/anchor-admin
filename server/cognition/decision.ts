@@ -171,15 +171,21 @@ export async function decide(
     return cached;
   }
 
-  // "I don't know" threshold: only when graph is COMPLETELY empty AND no conversation history
+  // Sparse data detection: when data is thin, run 5-agent micro-analysis
+  // instead of full pipeline. Tag kept for metrics — but NEVER blocks output.
   const nodeCount = (db.prepare("SELECT COUNT(*) as c FROM graph_nodes WHERE user_id=?").get(DEFAULT_USER_ID) as any)?.c ?? 0;
   const memCount = (db.prepare("SELECT COUNT(*) as c FROM memories WHERE user_id=?").get(DEFAULT_USER_ID) as any)?.c ?? 0;
-  if (nodeCount === 0 && memCount === 0 && history.length === 0) {
-    return {
-      raw: "Welcome to Anchor. Tell me about yourself — what you're working on, your goals, and what's on your mind. The more I know, the better I can help.",
-      isPlan: false,
-      packet: null,
-    };
+  const isSparseData = nodeCount < 5 && memCount < 5 && history.length < 3;
+
+  if (isSparseData) {
+    try {
+      const { runSparseAnalysis } = await import("./sparse-analysis.js");
+      const analysis = await runSparseAnalysis();
+      const raw = analysis.synthesizedInsight || "Tell me about yourself and I'll start building your world.";
+      return { raw, isPlan: false, packet: null };
+    } catch {
+      // Sparse analysis failed — fall through to normal pipeline
+    }
   }
 
   // Skill-aware routing: check if a learned skill matches this request

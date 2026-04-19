@@ -9,6 +9,7 @@ import { nanoid } from "nanoid";
 import { scanBrowserHistory, getAvailableBrowsers } from "./browser-history.js";
 import { scanContacts } from "./contacts.js";
 import { scanCalendar } from "./calendar.js";
+import { deepScanMac, profileToText } from "./deep-scan.js";
 import { extractFromText } from "../../cognition/extractor.js";
 import type { IngestionEvent } from "../types.js";
 
@@ -75,7 +76,17 @@ export async function runLocalScan(opts?: {
   let calendarEvents: IngestionEvent[] = [];
 
   try {
-    // Gather events from all sources
+    // ── Step 0: Deep Mac scan — apps, projects, files, tech stack ──
+    // This runs FIRST because it's instant (no LLM) and gives rich context
+    const macProfile = deepScanMac();
+    const profileText = profileToText(macProfile);
+    if (profileText.length > 50) {
+      console.log("[LocalScan] Deep scan: extracting from Mac profile...");
+      await extractFromText(profileText);
+      await new Promise(r => setTimeout(r, 500));
+    }
+
+    // ── Step 1: Gather events from all sources ──
     if (browser) browserEvents = scanBrowserHistory(sinceDaysAgo);
     if (contacts) contactEvents = scanContacts();
     if (calendar) calendarEvents = scanCalendar(sinceDaysAgo);
