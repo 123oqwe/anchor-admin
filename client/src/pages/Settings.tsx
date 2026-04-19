@@ -88,8 +88,8 @@ function SkillTemplates() {
   const [templates, setTemplates] = useState<any[]>([]);
   const [skills, setSkills] = useState<any[]>([]);
   useEffect(() => {
-    fetch("/api/skills/templates").then(r => r.json()).then(setTemplates).catch(() => {});
-    fetch("/api/skills").then(r => r.json()).then(setSkills).catch(() => {});
+    fetch("/api/skills/templates").then(r => r.json()).then(d => Array.isArray(d) ? setTemplates(d) : null).catch(() => {});
+    fetch("/api/skills").then(r => r.json()).then(d => Array.isArray(d) ? setSkills(d) : null).catch(() => {});
   }, []);
   const installed = new Set(skills.map((s: any) => s.name));
 
