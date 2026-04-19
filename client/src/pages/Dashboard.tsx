@@ -18,8 +18,23 @@ import { useLocation } from "wouter";
 import {
   Zap, Target, Activity, ArrowRight, AlertCircle,
   Users, Loader2, TrendingUp, Brain,
+  Briefcase, Heart, DollarSign, GraduationCap, ChevronRight,
 } from "lucide-react";
 import { api } from "@/lib/api";
+
+const DOMAIN_ICONS: Record<string, any> = {
+  work: Briefcase, relationships: Users, finance: DollarSign,
+  growth: GraduationCap, health: Heart,
+};
+const DOMAIN_COLORS: Record<string, string> = {
+  work: "text-blue-400", relationships: "text-purple-400", finance: "text-emerald-400",
+  growth: "text-amber-400", health: "text-rose-400",
+};
+const STATUS_DOT: Record<string, string> = {
+  active: "bg-emerald-400", "in-progress": "bg-blue-400", stable: "bg-emerald-400/60",
+  decaying: "bg-amber-400", overdue: "bg-red-400", delayed: "bg-red-400",
+  blocked: "bg-red-400/60", done: "bg-emerald-400/30", worsening: "bg-red-400",
+};
 
 const fade = { initial: { opacity: 0, y: 12 }, animate: { opacity: 1, y: 0 } };
 
@@ -30,6 +45,8 @@ export default function Dashboard() {
   const [state, setState] = useState<any>(null);
   const [portrait, setPortrait] = useState<any>(null);
   const [people, setPeople] = useState<any[]>([]);
+  const [domains, setDomains] = useState<any[]>([]);
+  const [expandedDomain, setExpandedDomain] = useState<string | null>(null);
 
   useEffect(() => {
     Promise.all([
@@ -41,9 +58,10 @@ export default function Dashboard() {
       setDecision(dec);
       setState(st);
       setPortrait(port);
-      // Extract people from graph
+      // Extract people and domains from graph
       const personNodes = graph?.domains?.flatMap((d: any) => d.items?.filter((i: any) => i.type === "person") ?? []) ?? [];
       setPeople(personNodes.slice(0, 3));
+      setDomains(graph?.domains ?? []);
     }).finally(() => setLoading(false));
   }, []);
 
@@ -189,6 +207,52 @@ export default function Dashboard() {
                   {loop}
                 </span>
               ))}
+            </div>
+          </motion.div>
+        )}
+
+        {/* ── Human Graph — life areas ─────────────────────────── */}
+        {domains.length > 0 && (
+          <motion.div {...fade} transition={{ delay: 0.55, duration: 0.5 }} className="mt-10">
+            <h2 className="text-xs font-medium text-muted-foreground/60 tracking-widest uppercase mb-4">Human Graph</h2>
+            <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+              {domains.filter((d: any) => d.nodeCount > 0 || ["work","relationships","finance","health","growth"].includes(d.id)).map((domain: any) => {
+                const Icon = DOMAIN_ICONS[domain.id] ?? Brain;
+                const color = DOMAIN_COLORS[domain.id] ?? "text-muted-foreground";
+                const isExpanded = expandedDomain === domain.id;
+                return (
+                  <div key={domain.id}
+                    className={`glass rounded-xl p-4 cursor-pointer transition-all hover:bg-white/[0.03] ${isExpanded ? "col-span-2 md:col-span-3" : ""}`}
+                    onClick={() => setExpandedDomain(isExpanded ? null : domain.id)}>
+                    <div className="flex items-center gap-2 mb-2">
+                      <Icon className={`h-4 w-4 ${color}`} />
+                      <span className="text-sm font-medium text-foreground">{domain.name ?? domain.id}</span>
+                      <span className="ml-auto text-xs text-muted-foreground font-mono">{domain.nodeCount}</span>
+                      <ChevronRight className={`h-3 w-3 text-muted-foreground/30 transition-transform ${isExpanded ? "rotate-90" : ""}`} />
+                    </div>
+                    {/* Health bar */}
+                    <div className="h-1 rounded-full bg-white/5 overflow-hidden">
+                      <div className={`h-full rounded-full ${domain.health > 70 ? "bg-emerald-400" : domain.health > 40 ? "bg-amber-400" : "bg-red-400"}`}
+                        style={{ width: `${domain.health}%` }} />
+                    </div>
+                    {domain.nodeCount === 0 && (
+                      <p className="text-[10px] text-muted-foreground/40 mt-2">No data — blind spot</p>
+                    )}
+                    {/* Expanded: show items */}
+                    {isExpanded && domain.items && (
+                      <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: "auto" }} className="mt-3 space-y-1.5">
+                        {domain.items.map((item: any) => (
+                          <div key={item.id ?? item.label} className="flex items-center gap-2 text-xs">
+                            <div className={`w-1.5 h-1.5 rounded-full shrink-0 ${STATUS_DOT[item.status] ?? "bg-muted-foreground/30"}`} />
+                            <span className="text-muted-foreground truncate flex-1">{item.label}</span>
+                            <span className="text-[10px] text-muted-foreground/50">{item.type}</span>
+                          </div>
+                        ))}
+                      </motion.div>
+                    )}
+                  </div>
+                );
+              })}
             </div>
           </motion.div>
         )}
