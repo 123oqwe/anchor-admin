@@ -458,6 +458,9 @@ try { db.exec("ALTER TABLE skills ADD COLUMN success_rate REAL NOT NULL DEFAULT 
 try { db.exec("ALTER TABLE skills ADD COLUMN context_conditions TEXT NOT NULL DEFAULT '{}'"); } catch {}
 try { db.exec("ALTER TABLE skills ADD COLUMN source TEXT NOT NULL DEFAULT 'dream_engine'"); } catch {}
 
+try { db.exec("ALTER TABLE graph_edges ADD COLUMN valid_from TEXT"); } catch {}
+try { db.exec("ALTER TABLE graph_edges ADD COLUMN valid_to TEXT"); } catch {}
+
 seedIfEmpty();
 
 /** Shared agent execution logger — replaces duplicate log() in 19 files. */

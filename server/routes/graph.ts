@@ -327,4 +327,22 @@ router.post("/import", (req, res) => {
   res.json({ ok: true, imported });
 });
 
+// ── Decaying relationships (for Dashboard card) ───────────────────────────
+router.get("/decaying-relationships", async (_req, res) => {
+  const people = db.prepare(
+    "SELECT id, label, detail, updated_at FROM graph_nodes WHERE user_id=? AND type='person' ORDER BY updated_at ASC"
+  ).all(DEFAULT_USER_ID) as any[];
+
+  try {
+    const { relationshipHealth, healthToStatus } = await import("../graph/math/decay.js");
+    const decaying = people.map((p: any) => {
+      const daysSince = (Date.now() - new Date(p.updated_at).getTime()) / 86400000;
+      const health = relationshipHealth(daysSince, 0);
+      return { id: p.id, label: p.label, health: Math.round(health * 100), status: healthToStatus(health), daysSince: Math.round(daysSince), detail: p.detail };
+    }).filter(p => p.health < 70).sort((a, b) => a.health - b.health).slice(0, 8);
+
+    res.json(decaying);
+  } catch { res.json([]); }
+});
+
 export default router;

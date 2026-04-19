@@ -49,6 +49,9 @@ export default function Dashboard() {
   const [domains, setDomains] = useState<any[]>([]);
   const [expandedDomain, setExpandedDomain] = useState<string | null>(null);
   const [digest, setDigest] = useState<any>(null);
+  const [decaying, setDecaying] = useState<any[]>([]);
+  const [twinModel, setTwinModel] = useState<any>(null);
+  const [evolution, setEvolution] = useState<any[]>([]);
   const { fetchGraph, fetchDecision, fetchDigest } = useAnchorStore();
 
   useEffect(() => {
@@ -58,7 +61,10 @@ export default function Dashboard() {
       fetch("/api/agents/self-portrait").then(r => r.ok ? r.json() : null).catch(() => null),
       fetchGraph().catch(() => null),
       fetchDigest().catch(() => null),
-    ]).then(([dec, st, port, graph, dig]) => {
+      api.getDecayingRelationships().catch(() => []),
+      api.getTwinModel().catch(() => null),
+      api.getEvolutionState().catch(() => []),
+    ]).then(([dec, st, port, graph, dig, decay, twin, evo]) => {
       setDecision(dec);
       setState(st);
       setPortrait(port);
@@ -66,6 +72,9 @@ export default function Dashboard() {
       setPeople(personNodes.slice(0, 3));
       setDomains(graph?.domains ?? []);
       setDigest(dig);
+      setDecaying(decay ?? []);
+      setTwinModel(twin);
+      setEvolution(evo ?? []);
     }).finally(() => setLoading(false));
   }, []);
 
@@ -235,6 +244,93 @@ export default function Dashboard() {
                   </span>
                 </div>
               ))}
+            </div>
+          </motion.div>
+        )}
+
+        {/* ── Fading Relationships ─────────────────────────── */}
+        {decaying.length > 0 && (
+          <motion.div {...fade} transition={{ delay: 0.48, duration: 0.5 }} className="mt-10">
+            <h2 className="text-xs font-medium text-muted-foreground/60 tracking-widest uppercase mb-4">Fading Relationships</h2>
+            <div className="space-y-2">
+              {decaying.slice(0, 4).map((p: any) => (
+                <div key={p.id} onClick={() => p.id && navigate(`/graph/${p.id}`)}
+                  className="glass rounded-xl px-4 py-3 flex items-center gap-3 cursor-pointer hover:bg-white/[0.03] transition-colors">
+                  <Users className="h-3.5 w-3.5 text-amber-400 shrink-0" />
+                  <div className="flex-1 min-w-0">
+                    <span className="text-sm font-medium text-foreground block truncate">{p.label}</span>
+                    <span className="text-[10px] text-muted-foreground">{p.daysSince} days since last contact</span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <div className="w-12 h-1.5 rounded-full bg-white/5 overflow-hidden">
+                      <div className={`h-full rounded-full ${p.health > 40 ? "bg-amber-400" : "bg-red-400"}`}
+                        style={{ width: `${p.health}%` }} />
+                    </div>
+                    <span className="text-[10px] font-mono text-amber-400/70">{p.health}%</span>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </motion.div>
+        )}
+
+        {/* ── How Anchor Sees You (Twin Model) ──────────────── */}
+        {twinModel && twinModel.totalInsights > 0 && (
+          <motion.div {...fade} transition={{ delay: 0.50, duration: 0.5 }} className="mt-10">
+            <h2 className="text-xs font-medium text-muted-foreground/60 tracking-widest uppercase mb-4">How Anchor Sees You</h2>
+            <div className="glass rounded-xl p-5 space-y-3">
+              {Object.entries(twinModel.categories ?? {}).slice(0, 4).map(([cat, insights]: [string, any]) => (
+                <div key={cat}>
+                  <span className="text-[10px] text-primary/60 tracking-wider uppercase">{cat}</span>
+                  {insights.slice(0, 2).map((ins: any, i: number) => (
+                    <div key={i} className="flex items-start gap-2 mt-1">
+                      <Brain className="h-3 w-3 text-purple-400 mt-0.5 shrink-0" />
+                      <p className="text-xs text-muted-foreground leading-relaxed">{ins.insight}</p>
+                      <span className="text-[9px] font-mono text-muted-foreground/30 shrink-0">{Math.round(ins.confidence * 100)}%</span>
+                    </div>
+                  ))}
+                </div>
+              ))}
+              {twinModel.contraindications?.length > 0 && (
+                <div className="pt-2 border-t border-white/5">
+                  <span className="text-[10px] text-red-400/60 tracking-wider uppercase">Learned Not To Suggest</span>
+                  {twinModel.contraindications.slice(0, 3).map((c: any, i: number) => (
+                    <p key={i} className="text-[10px] text-red-400/50 mt-1">• {c.label}</p>
+                  ))}
+                </div>
+              )}
+            </div>
+          </motion.div>
+        )}
+
+        {/* ── System Adaptation ──────────────────────────────── */}
+        {evolution.length > 0 && (
+          <motion.div {...fade} transition={{ delay: 0.52, duration: 0.5 }} className="mt-10">
+            <h2 className="text-xs font-medium text-muted-foreground/60 tracking-widest uppercase mb-4">System Adaptation</h2>
+            <div className="glass rounded-xl p-5 space-y-3">
+              {evolution.map((dim: any) => {
+                const isJson = dim.value?.startsWith("{") || dim.value?.startsWith("[");
+                return (
+                  <div key={dim.dimension} className="flex items-center gap-3">
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2 mb-0.5">
+                        <span className="text-xs text-foreground">{dim.label}</span>
+                        <span className="text-[9px] font-mono text-muted-foreground/30">{dim.evidenceCount} data points</span>
+                      </div>
+                      {isJson ? (
+                        <span className="text-[10px] text-primary/70 font-mono">{dim.value.slice(0, 60)}</span>
+                      ) : (
+                        <div className="flex items-center gap-2">
+                          {dim.previousValue && dim.previousValue !== dim.value && (
+                            <span className="text-[10px] text-muted-foreground/30 line-through">{dim.previousValue}</span>
+                          )}
+                          <span className="text-[10px] text-primary font-medium">{dim.value}</span>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                );
+              })}
             </div>
           </motion.div>
         )}

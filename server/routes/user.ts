@@ -84,4 +84,28 @@ router.get("/models", (_req, res) => {
   res.json(getStatus());
 });
 
+// ── Evolution state (what system has learned about user preferences) ───────
+router.get("/evolution", (_req, res) => {
+  const dims = db.prepare(
+    "SELECT dimension, current_value, previous_value, evidence_count, last_updated FROM evolution_state WHERE user_id=?"
+  ).all(DEFAULT_USER_ID) as any[];
+
+  const DIMENSION_LABELS: Record<string, string> = {
+    decision_style: "Decision Style",
+    plan_complexity: "Plan Complexity",
+    communication_tone: "Communication Tone",
+    domain_weights: "Domain Priorities",
+    time_preference: "Time Preference",
+  };
+
+  res.json(dims.map((d: any) => ({
+    dimension: d.dimension,
+    label: DIMENSION_LABELS[d.dimension] ?? d.dimension,
+    value: d.current_value,
+    previousValue: d.previous_value,
+    evidenceCount: d.evidence_count,
+    lastUpdated: d.last_updated,
+  })));
+});
+
 export default router;

@@ -262,12 +262,20 @@ export function enforceCapacity(): number {
   return result.changes;
 }
 
+/** Expire edges where valid_to has passed */
+function expireTemporalEdges(): number {
+  const result = db.prepare(
+    "DELETE FROM graph_edges WHERE valid_to IS NOT NULL AND valid_to < datetime('now')"
+  ).run();
+  return result.changes;
+}
+
 // ── Master Dream function ───────────────────────────────────────────────────
 
 export async function runDream(): Promise<{
   pruned: number; merged: number; promoted: number;
   contradictions: number; skillsCreated: number; capacityRemoved: number;
-  timeNormalized: number;
+  timeNormalized: number; expiredEdges: number;
 }> {
   console.log("[Dream] Starting memory consolidation...");
 
@@ -277,8 +285,9 @@ export async function runDream(): Promise<{
   const promoted = promoteRecurring();
   const skillsCreated = await createSkillsFromExecutions();
   const capacityRemoved = enforceCapacity();
+  const expiredEdges = expireTemporalEdges();
 
-  const stats = { pruned, merged: contradictions, promoted, contradictions, skillsCreated, capacityRemoved, timeNormalized };
+  const stats = { pruned, merged: contradictions, promoted, contradictions, skillsCreated, capacityRemoved, timeNormalized, expiredEdges };
 
   // Log the dream run
   db.prepare(

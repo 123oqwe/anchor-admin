@@ -20,15 +20,18 @@ try {
       user_id TEXT NOT NULL,
       app_name TEXT NOT NULL,
       window_title TEXT NOT NULL,
+      url TEXT NOT NULL DEFAULT '',
       captured_at TEXT NOT NULL DEFAULT (datetime('now'))
     );
     CREATE INDEX IF NOT EXISTS idx_activity_user ON activity_captures(user_id, captured_at);
   `);
 } catch {}
 
+try { db.exec("ALTER TABLE activity_captures ADD COLUMN url TEXT NOT NULL DEFAULT ''"); } catch {}
+
 // ── Capture current active window ───────────────────────────────────────────
 
-export function captureActiveWindow(): { app: string; title: string } | null {
+export function captureActiveWindow(): { app: string; title: string; url: string } | null {
   try {
     const result = execSync(
       `osascript -e 'tell application "System Events"
@@ -46,11 +49,35 @@ export function captureActiveWindow(): { app: string; title: string } | null {
     const [app, title] = result.split("|", 2);
     if (!app) return null;
 
-    // Save to DB
-    db.prepare("INSERT INTO activity_captures (id, user_id, app_name, window_title, captured_at) VALUES (?,?,?,?,datetime('now'))")
-      .run(nanoid(), DEFAULT_USER_ID, app.trim(), (title ?? "").trim());
+    // Capture browser URL if active app is a browser
+    let url = "";
+    const browserApp = app?.trim();
+    if (browserApp === "Google Chrome" || browserApp === "Safari" || browserApp === "Arc") {
+      try {
+        if (browserApp === "Google Chrome") {
+          url = execSync(
+            `osascript -e 'tell application "Google Chrome" to return URL of active tab of front window'`,
+            { timeout: 2000, encoding: "utf-8" }
+          ).trim();
+        } else if (browserApp === "Safari") {
+          url = execSync(
+            `osascript -e 'tell application "Safari" to return URL of front document'`,
+            { timeout: 2000, encoding: "utf-8" }
+          ).trim();
+        } else if (browserApp === "Arc") {
+          url = execSync(
+            `osascript -e 'tell application "Arc" to return URL of active tab of front window'`,
+            { timeout: 2000, encoding: "utf-8" }
+          ).trim();
+        }
+      } catch {}
+    }
 
-    return { app: app.trim(), title: (title ?? "").trim() };
+    // Save to DB
+    db.prepare("INSERT INTO activity_captures (id, user_id, app_name, window_title, url, captured_at) VALUES (?,?,?,?,?,datetime('now'))")
+      .run(nanoid(), DEFAULT_USER_ID, app.trim(), (title ?? "").trim(), url);
+
+    return { app: app.trim(), title: (title ?? "").trim(), url };
   } catch {
     return null;
   }

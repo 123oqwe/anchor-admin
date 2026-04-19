@@ -102,6 +102,15 @@ export const api = {
   completeQuest: (id: string) => req("POST", `/api/twin/quests/${id}/complete`, {}),
   addXP: (amount: number) => req("POST", "/api/twin/xp", { amount }),
 
+  // Decaying relationships
+  getDecayingRelationships: () => req<any[]>("GET", "/api/graph/decaying-relationships"),
+
+  // Twin model
+  getTwinModel: () => req<any>("GET", "/api/twin/model"),
+
+  // Evolution state
+  getEvolutionState: () => req<any[]>("GET", "/api/user/evolution"),
+
   // Agents
   getAgentStatus: () => req<any[]>("GET", "/api/agents/status"),
   getExecutions: () => req<any[]>("GET", "/api/agents/executions"),

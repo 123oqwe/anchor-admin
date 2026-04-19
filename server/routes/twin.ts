@@ -66,4 +66,31 @@ router.post("/xp", (req, res) => {
   res.json({ ok: true });
 });
 
+// ── Twin behavioral model (what Twin thinks about the user) ────────────────
+router.get("/model", (_req, res) => {
+  const insights = db.prepare(
+    "SELECT category, insight, confidence, trend, created_at FROM twin_insights WHERE user_id=? ORDER BY confidence DESC LIMIT 10"
+  ).all(DEFAULT_USER_ID) as any[];
+
+  // Group by category
+  const categories = new Map<string, any[]>();
+  for (const i of insights) {
+    const cat = i.category ?? "general";
+    if (!categories.has(cat)) categories.set(cat, []);
+    categories.get(cat)!.push(i);
+  }
+
+  // Get contraindications (things Twin learned NOT to suggest)
+  const contraindications = db.prepare(
+    "SELECT label, detail FROM graph_nodes WHERE user_id=? AND type='constraint' AND captured LIKE '%Twin%' ORDER BY created_at DESC LIMIT 5"
+  ).all(DEFAULT_USER_ID) as any[];
+
+  res.json({
+    totalInsights: insights.length,
+    categories: Object.fromEntries(categories),
+    contraindications,
+    lastUpdated: insights[0]?.created_at ?? null,
+  });
+});
+
 export default router;

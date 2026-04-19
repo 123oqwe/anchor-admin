@@ -12,6 +12,9 @@ import { checkProactiveTriggers } from "./enforcement.js";
 import { markStaleAsDecaying } from "../graph/writer.js";
 import { runIngestion } from "../integrations/pipeline.js";
 import { captureActiveWindow, updateGraphFromActivity, cleanupOldCaptures } from "../integrations/local/activity-monitor.js";
+import { runPersonalEvolution } from "../cognition/evolution.js";
+import { analyzeExecutionTraces } from "../cognition/gepa.js";
+import { runSystemEvolution } from "./system-evolution.js";
 
 // ── Every day 08:00 — Morning Digest ────────────────────────────────────────
 schedule("0 8 * * *", async () => {
@@ -200,8 +203,50 @@ schedule("55 2 * * *", () => {
   }
 });
 
+// ── Every day 04:00 — Personal Evolution Engine ───────────────────────────
+schedule("0 4 * * *", async () => {
+  console.log("[Cron] Personal Evolution starting...");
+  try {
+    const result = await runPersonalEvolution();
+    if (result.dimensionsUpdated.length > 0) {
+      logExecution("Evolution Engine", `Evolved: ${result.dimensionsUpdated.join(", ")} (${result.signalsProcessed} signals)`);
+    }
+  } catch (err: any) {
+    console.error("[Cron] Evolution failed:", err.message);
+    logExecution("Evolution Engine", "Evolution failed", "failed");
+  }
+});
+
+// ── Every Sunday 05:00 — GEPA Execution Trace Analysis ────────────────────
+schedule("0 5 * * 0", async () => {
+  console.log("[Cron] GEPA analysis starting...");
+  try {
+    const result = await analyzeExecutionTraces(7);
+    if (result.wastePatterns.length > 0 || result.optimizations.length > 0) {
+      logExecution("GEPA Optimizer", `Weekly: ${result.wastePatterns.length} waste, ${result.optimizations.length} opts, efficiency=${result.efficiency}%`);
+    }
+  } catch (err: any) {
+    console.error("[Cron] GEPA failed:", err.message);
+    logExecution("GEPA Optimizer", "GEPA analysis failed", "failed");
+  }
+});
+
+// ── Every Sunday 06:00 — System Evolution (model routing optimization) ────
+schedule("0 6 * * 0", async () => {
+  console.log("[Cron] System Evolution starting...");
+  try {
+    const result = await runSystemEvolution();
+    if (result.routesUpdated > 0) {
+      logExecution("System Evolution", `Applied ${result.routesUpdated} routing changes`);
+    }
+  } catch (err: any) {
+    console.error("[Cron] System Evolution failed:", err.message);
+    logExecution("System Evolution", "System evolution failed", "failed");
+  }
+});
+
 export function startCronJobs() {
   // Start first capture immediately
   try { captureActiveWindow(); } catch (err) { console.error("[Cron] Initial capture failed:", err); }
-  console.log("⏰ Cron: Activity(5min) | Digest(8am) | Decay(6h) | Twin(Mon 9am) | Tasks(10pm) | Dream(3am) | Proactive(3h) | GraphUpdate(6h)");
+  console.log("⏰ Cron: Activity(5min) | Digest(8am) | Decay(6h) | Twin(Mon 9am) | Tasks(10pm) | Dream(3am) | Evolution(4am) | GEPA(Sun 5am) | SysEvo(Sun 6am) | Proactive(12h) | GraphUpdate(6h)");
 }
