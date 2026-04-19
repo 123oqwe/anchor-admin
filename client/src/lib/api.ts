@@ -114,6 +114,8 @@ export const api = {
   // Agents
   getAgentStatus: () => req<any[]>("GET", "/api/agents/status"),
   getExecutions: () => req<any[]>("GET", "/api/agents/executions"),
+  getRecommendations: () => req<any[]>("GET", "/api/agents/recommendations"),
+  acceptRecommendation: (action: any) => req<any>("POST", "/api/agents/recommendations/accept", { action }),
 
   // Advisor
   getChatHistory: (mode: string) => req<any[]>("GET", `/api/advisor/history/${mode}`),

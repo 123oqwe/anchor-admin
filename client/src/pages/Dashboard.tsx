@@ -19,6 +19,7 @@ import {
   Zap, Target, Activity, ArrowRight, AlertCircle,
   Users, Loader2, TrendingUp, Brain,
   Briefcase, Heart, DollarSign, GraduationCap, ChevronRight,
+  Lightbulb, Check,
 } from "lucide-react";
 import { api } from "@/lib/api";
 import { useAnchorStore } from "@/lib/store";
@@ -52,6 +53,7 @@ export default function Dashboard() {
   const [decaying, setDecaying] = useState<any[]>([]);
   const [twinModel, setTwinModel] = useState<any>(null);
   const [evolution, setEvolution] = useState<any[]>([]);
+  const [recommendations, setRecommendations] = useState<any[]>([]);
   const { fetchGraph, fetchDecision, fetchDigest } = useAnchorStore();
 
   useEffect(() => {
@@ -64,7 +66,8 @@ export default function Dashboard() {
       api.getDecayingRelationships().catch(() => []),
       api.getTwinModel().catch(() => null),
       api.getEvolutionState().catch(() => []),
-    ]).then(([dec, st, port, graph, dig, decay, twin, evo]) => {
+      api.getRecommendations().catch(() => []),
+    ]).then(([dec, st, port, graph, dig, decay, twin, evo, recs]) => {
       setDecision(dec);
       setState(st);
       setPortrait(port);
@@ -75,6 +78,7 @@ export default function Dashboard() {
       setDecaying(decay ?? []);
       setTwinModel(twin);
       setEvolution(evo ?? []);
+      setRecommendations(recs ?? []);
     }).finally(() => setLoading(false));
   }, []);
 
@@ -174,6 +178,37 @@ export default function Dashboard() {
                   ))}
                 </div>
               )}
+            </div>
+          </motion.div>
+        )}
+
+        {/* ── Suggestions (system-recommended actions) ────────── */}
+        {recommendations.length > 0 && (
+          <motion.div {...fade} transition={{ delay: 0.12, duration: 0.5 }} className="mt-10">
+            <h2 className="text-xs font-medium text-muted-foreground/60 tracking-widest uppercase mb-4">Suggestions</h2>
+            <div className="space-y-2">
+              {recommendations.map((rec: any) => (
+                <div key={rec.id} className="glass rounded-xl px-4 py-3 flex items-center gap-3">
+                  <Lightbulb className={`h-4 w-4 shrink-0 ${rec.type === "agent" ? "text-primary" : rec.type === "cron" ? "text-amber-400" : "text-cyan-400"}`} />
+                  <div className="flex-1 min-w-0">
+                    <span className="text-sm font-medium text-foreground block truncate">{rec.title}</span>
+                    <span className="text-[10px] text-muted-foreground">{rec.reason}</span>
+                  </div>
+                  <button
+                    onClick={async () => {
+                      try {
+                        await api.acceptRecommendation(rec.action);
+                        setRecommendations(prev => prev.filter(r => r.id !== rec.id));
+                        const { toast } = await import("sonner");
+                        toast.success(`Created: ${rec.title}`);
+                      } catch {}
+                    }}
+                    className="flex items-center gap-1 px-3 py-1.5 rounded-lg bg-primary/10 text-primary text-xs font-medium hover:bg-primary/20 transition-colors shrink-0"
+                  >
+                    <Check className="h-3 w-3" /> Accept
+                  </button>
+                </div>
+              ))}
             </div>
           </motion.div>
         )}
