@@ -18,6 +18,8 @@ import {
   Loader2,
   Check,
   AlertCircle,
+  ThumbsUp,
+  ThumbsDown,
 } from "lucide-react";
 import { Switch } from "@/components/ui/switch";
 import { Badge } from "@/components/ui/badge";
@@ -239,6 +241,17 @@ function CustomAgentsList() {
                   {runResult && (
                     <div className="p-2 bg-primary/5 rounded-lg">
                       <p className="text-xs text-muted-foreground whitespace-pre-line">{runResult}</p>
+                      <div className="flex items-center gap-2 mt-2 pt-2 border-t border-white/5">
+                        <span className="text-[10px] text-muted-foreground/40">Was this helpful?</span>
+                        <button onClick={() => { api.feedbackCustomAgent(a.id, "good", runResult.slice(0, 100)); toast.success("Thanks!"); }}
+                          className="p-1 rounded hover:bg-emerald-500/10 text-muted-foreground/40 hover:text-emerald-400 transition-colors">
+                          <ThumbsUp className="h-3 w-3" />
+                        </button>
+                        <button onClick={() => { api.feedbackCustomAgent(a.id, "bad", runResult.slice(0, 100)); toast.success("Noted — system will improve"); }}
+                          className="p-1 rounded hover:bg-red-500/10 text-muted-foreground/40 hover:text-red-400 transition-colors">
+                          <ThumbsDown className="h-3 w-3" />
+                        </button>
+                      </div>
                     </div>
                   )}
                 </div>

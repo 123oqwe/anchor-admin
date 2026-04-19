@@ -12,9 +12,10 @@
  *
  * Runs weekly (alongside System Evolution) or on-demand.
  */
-import { db, DEFAULT_USER_ID } from "../infra/storage/db.js";
+import { db, DEFAULT_USER_ID, logExecution } from "../infra/storage/db.js";
 import { nanoid } from "nanoid";
 import { text } from "../infra/compute/index.js";
+import { setRouteOverride } from "../infra/compute/telemetry.js";
 
 export interface TraceAnalysis {
   totalCalls: number;
@@ -139,9 +140,23 @@ export async function analyzeExecutionTraces(daysBack = 7): Promise<TraceAnalysi
 
   const efficiency = Math.max(0, 100 - wastePatterns.length * 15 - Math.round(failedCalls.length / totalCalls * 100));
 
+  // Auto-apply optimizations that are safe (route overrides)
+  let applied = 0;
+  for (const opt of optimizations) {
+    if (opt.autoApplicable && opt.target) {
+      // If suggestion mentions using a cheaper/faster model, apply route override
+      const suggLower = opt.suggestion.toLowerCase();
+      if (suggLower.includes("cheaper") || suggLower.includes("fast") || suggLower.includes("haiku") || suggLower.includes("smaller")) {
+        // Downgrade to cheap tier for this task
+        setRouteOverride(opt.target, "claude-haiku-4-5-20251001");
+        applied++;
+        console.log(`[GEPA] Auto-applied: ${opt.target} → haiku (${opt.estimatedSaving})`);
+      }
+    }
+  }
+
   // Log the analysis
-  db.prepare("INSERT INTO agent_executions (id, user_id, agent, action, status) VALUES (?,?,?,?,?)")
-    .run(nanoid(), DEFAULT_USER_ID, "GEPA Optimizer", `Analyzed ${totalCalls} calls: ${wastePatterns.length} waste patterns, ${optimizations.length} optimizations`, "success");
+  logExecution("GEPA Optimizer", `Analyzed ${totalCalls} calls: ${wastePatterns.length} waste, ${optimizations.length} opts, ${applied} auto-applied`);
 
   return { totalCalls, totalTokens, wastePatterns, optimizations, efficiency };
 }

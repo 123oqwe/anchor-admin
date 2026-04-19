@@ -145,6 +145,7 @@ export const api = {
   deleteCustomAgent: (id: string) => req("DELETE", `/api/agents/custom/${id}`),
   installAgentTemplate: (templateIndex: number) => req<any>("POST", "/api/agents/custom/install-template", { templateIndex }),
   runCustomAgent: (id: string, message: string) => req<any>("POST", `/api/agents/custom/${id}/run`, { message }),
+  feedbackCustomAgent: (id: string, rating: "good" | "bad", context?: string) => req("POST", `/api/agents/custom/${id}/feedback`, { rating, context }),
 
   // Integrations — Google OAuth
   getIntegrationStatus: () => req<any>("GET", "/api/integrations/status"),

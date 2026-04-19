@@ -3,10 +3,13 @@
  * Each agent = persona overlay on Decision Agent (instructions + tools).
  */
 import { Router } from "express";
-import { db, DEFAULT_USER_ID } from "../infra/storage/db.js";
+import { db, DEFAULT_USER_ID, logExecution } from "../infra/storage/db.js";
 import { nanoid } from "nanoid";
 import { text } from "../infra/compute/index.js";
 import { serializeForPrompt } from "../graph/reader.js";
+import { extractFromMessage } from "../cognition/extractor.js";
+import { writeMemory } from "../memory/retrieval.js";
+import { trackPlanDecision } from "../cognition/twin.js";
 
 const router = Router();
 
@@ -76,7 +79,17 @@ router.post("/custom/:id/run", async (req, res) => {
 
   try {
     const graphContext = serializeForPrompt();
-    const systemPrompt = `${agent.instructions}\n\nUser's Human Graph context:\n${graphContext}`;
+
+    // Load previous conversations with this agent (independent memory per agent)
+    const prevRuns = db.prepare(
+      "SELECT content FROM memories WHERE user_id=? AND source=? AND type='episodic' ORDER BY created_at DESC LIMIT 5"
+    ).all(DEFAULT_USER_ID, `Custom: ${agent.name}`) as any[];
+
+    const prevContext = prevRuns.length > 0
+      ? `\n\nPREVIOUS CONVERSATIONS WITH THIS AGENT:\n${prevRuns.map((r: any) => r.content.slice(0, 200)).join("\n---\n")}`
+      : "";
+
+    const systemPrompt = `${agent.instructions}\n\nUser's Human Graph context:\n${graphContext}${prevContext}`;
 
     const result = await text({
       task: "decision",
@@ -86,13 +99,52 @@ router.post("/custom/:id/run", async (req, res) => {
     });
 
     // Log execution
-    db.prepare("INSERT INTO agent_executions (id, user_id, agent, action, status) VALUES (?,?,?,?,?)")
-      .run(nanoid(), DEFAULT_USER_ID, `Custom: ${agent.name}`, message.slice(0, 100), "success");
+    logExecution(`Custom: ${agent.name}`, message.slice(0, 100), "success");
 
-    res.json({ content: result, agentName: agent.name });
+    // Save result as episodic memory (so next run has context)
+    writeMemory({
+      type: "episodic",
+      title: `${agent.name}: ${message.slice(0, 40)}`,
+      content: `User asked: ${message.slice(0, 100)}\nAgent responded: ${result.slice(0, 300)}`,
+      tags: ["custom-agent", agent.name.toLowerCase().replace(/\s+/g, "-")],
+      source: `Custom: ${agent.name}`,
+      confidence: 0.8,
+    });
+
+    // Extract insights into graph (non-blocking, fires async internally)
+    extractFromMessage(result);
+
+    const runId = nanoid();
+    res.json({ id: runId, content: result, agentName: agent.name });
   } catch (err: any) {
+    logExecution(`Custom: ${agent.name}`, message.slice(0, 100), "failed");
     res.status(500).json({ error: err.message });
   }
+});
+
+// Rate custom agent response (Twin learning)
+router.post("/custom/:id/feedback", (req, res) => {
+  const agent = db.prepare("SELECT name FROM user_agents WHERE id=? AND user_id=?").get(req.params.id, DEFAULT_USER_ID) as any;
+  if (!agent) return res.status(404).json({ error: "Agent not found" });
+
+  const { rating, context } = req.body; // rating: "good" | "bad"
+  if (!rating) return res.status(400).json({ error: "rating required" });
+
+  // Record satisfaction signal for Twin
+  db.prepare("INSERT INTO satisfaction_signals (id, user_id, signal_type, context, value) VALUES (?,?,?,?,?)")
+    .run(nanoid(), DEFAULT_USER_ID, rating === "good" ? "agent_approved" : "agent_rejected",
+         `Custom Agent: ${agent.name} — ${(context ?? "").slice(0, 100)}`,
+         rating === "good" ? 1.0 : -1.0);
+
+  // Feed into Twin pattern tracking
+  trackPlanDecision(
+    rating === "good" ? "confirmed" : "rejected",
+    `Custom Agent "${agent.name}" response`,
+    1
+  );
+
+  logExecution("Twin Agent", `Custom agent feedback: ${agent.name} → ${rating}`);
+  res.json({ ok: true });
 });
 
 export default router;
