@@ -17,6 +17,7 @@ import MemoryUser from "./pages/Memory";
 import Workspace from "./pages/Workspace";
 import Settings from "./pages/Settings";
 import Cortex from "./pages/Cortex";
+import Overview from "./pages/admin/Overview";
 import Logs from "./pages/admin/Logs";
 import Data from "./pages/admin/Data";
 import Costs from "./pages/admin/Costs";
@@ -24,15 +25,24 @@ import Performance from "./pages/admin/Performance";
 import GraphAdmin from "./pages/admin/Graph";
 import MemoryAdmin from "./pages/admin/Memory";
 import Health from "./pages/admin/Health";
+import Agents from "./pages/admin/Agents";
+import AdminCrons from "./pages/admin/Crons";
+import AdminPermissions from "./pages/admin/Permissions";
+import AdminPrivacy from "./pages/admin/Privacy";
 
 function Router() {
   return (
     <Switch>
       {/* Admin routes */}
-      <Route path="/admin"><AdminLayout><Cortex /></AdminLayout></Route>
+      <Route path="/admin"><AdminLayout><Overview /></AdminLayout></Route>
+      <Route path="/admin/models"><AdminLayout><Cortex /></AdminLayout></Route>
       <Route path="/admin/costs"><AdminLayout><Costs /></AdminLayout></Route>
       <Route path="/admin/performance"><AdminLayout><Performance /></AdminLayout></Route>
       <Route path="/admin/logs"><AdminLayout><Logs /></AdminLayout></Route>
+      <Route path="/admin/agents"><AdminLayout><Agents /></AdminLayout></Route>
+      <Route path="/admin/crons"><AdminLayout><AdminCrons /></AdminLayout></Route>
+      <Route path="/admin/permissions"><AdminLayout><AdminPermissions /></AdminLayout></Route>
+      <Route path="/admin/privacy"><AdminLayout><AdminPrivacy /></AdminLayout></Route>
       <Route path="/admin/graph"><AdminLayout><GraphAdmin /></AdminLayout></Route>
       <Route path="/admin/memory"><AdminLayout><MemoryAdmin /></AdminLayout></Route>
       <Route path="/admin/data"><AdminLayout><Data /></AdminLayout></Route>

@@ -24,25 +24,33 @@ The admin panel is NOT for end users. It's the cockpit for running an AI product
 /admin/health             → merged into Overview
 ```
 
-## Connection to Existing Product
+## Architecture — Separate Process, Shared Database
 
 ```
-┌─────────────────────────────────────────────────┐
-│ USER PRODUCT (/)                                │
-│  Dashboard · Advisor · Settings · Memory · etc  │
-│  → Users see themselves, talk to system         │
-└────────────────────┬────────────────────────────┘
-                     │ same Express server
-                     │ same SQLite DB
-                     │ same API routes
-┌────────────────────┴────────────────────────────┐
-│ ADMIN PANEL (/admin)                            │
-│  Overview · AI Ops · Agents · Trust · Data      │
-│  → Founder sees system internals, controls it   │
-└─────────────────────────────────────────────────┘
+┌──────────────────────────────┐    ┌──────────────────────────────┐
+│ USER PRODUCT (:3000)         │    │ ADMIN PANEL (:3001)          │
+│ server/index.ts              │    │ server/admin.ts (NEW)        │
+│ Dashboard · Advisor · etc    │    │ Overview · AI Ops · Agents   │
+│ + WebSocket + Cron + Telegram│    │ Trust · Data                 │
+│                              │    │ NO cron, NO ws, NO telegram  │
+└──────────────┬───────────────┘    └──────────────┬───────────────┘
+               │                                   │
+               └──────────┬────────────────────────┘
+                          │
+                   ┌──────┴──────┐
+                   │  anchor.db  │
+                   │  SQLite WAL │
+                   │  32 tables  │
+                   └─────────────┘
 ```
 
-No separate server. No separate database. Admin reads from the SAME tables the product writes to. Admin writes to config tables (route_overrides, trust_state, user_crons).
+Two processes, one database. Admin reads from the SAME tables the product writes to. Admin writes to config tables (route_overrides, trust_state, user_crons).
+
+**Why separate process:**
+- Main server crashes → Admin still works for diagnosis
+- Admin heavy queries don't slow user experience
+- Can restart independently
+- `npm run dev` starts product, `npm run admin` starts admin panel
 
 ## 5 Areas — Detailed Spec
 

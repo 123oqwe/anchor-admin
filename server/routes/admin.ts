@@ -259,4 +259,151 @@ router.get("/health", (_req, res) => {
   }
 });
 
+// ── Agent Monitor ─────────────────────────────────────────────────────────
+router.get("/agent-status", (_req, res) => {
+  const SYSTEM_AGENTS = [
+    "Decision Agent", "Twin Agent", "Evolution Engine", "Skills Engine",
+    "Execution Agent", "Dream Engine", "GEPA Optimizer", "Proactive Agent",
+    "Observation Agent", "Memory Agent", "Self-Portrait",
+  ];
+
+  const systemAgents = SYSTEM_AGENTS.map(name => {
+    const stats = db.prepare(
+      "SELECT status, COUNT(*) as cnt, MAX(created_at) as last_run FROM agent_executions WHERE user_id=? AND agent=? GROUP BY status"
+    ).all(DEFAULT_USER_ID, name) as any[];
+
+    const successes = stats.find((s: any) => s.status === "success")?.cnt ?? 0;
+    const failures = stats.find((s: any) => s.status === "failed")?.cnt ?? 0;
+    const lastRun = stats[0]?.last_run ?? null;
+
+    return { name, successes, failures, lastRun, status: lastRun ? "active" : "never" };
+  });
+
+  const customAgents = db.prepare("SELECT id, name, created_at FROM user_agents WHERE user_id=?").all(DEFAULT_USER_ID) as any[];
+  const customWithStats = customAgents.map((a: any) => {
+    const stats = db.prepare(
+      "SELECT COUNT(*) as runs, MAX(created_at) as last_run FROM agent_executions WHERE user_id=? AND agent=?"
+    ).get(DEFAULT_USER_ID, `Custom: ${a.name}`) as any;
+    return { id: a.id, name: a.name, runs: stats?.runs ?? 0, lastRun: stats?.last_run ?? null, status: "manual" };
+  });
+
+  res.json({ systemAgents, customAgents: customWithStats });
+});
+
+// ── Cron Status ───────────────────────────────────────────────────────────
+router.get("/cron-status", (_req, res) => {
+  const CRONS = [
+    { name: "Activity Capture", pattern: "*/5 * * * *", agent: "Activity Monitor" },
+    { name: "Decay Checker", pattern: "0 */6 * * *", agent: "Observation Agent" },
+    { name: "Ingestion Pipeline", pattern: "0 */6 * * *", agent: "Ingestion Pipeline" },
+    { name: "Graph Update", pattern: "30 */6 * * *", agent: "Activity Monitor" },
+    { name: "Proactive Check", pattern: "0 */12 * * *", agent: "Orchestrator" },
+    { name: "SQLite Backup", pattern: "55 2 * * *", agent: "Backup" },
+    { name: "Dream Engine", pattern: "0 3 * * *", agent: "Dream Engine" },
+    { name: "Evolution Engine", pattern: "0 4 * * *", agent: "Evolution Engine" },
+    { name: "Morning Digest", pattern: "0 8 * * *", agent: "Observation Agent" },
+    { name: "Stale Task Detector", pattern: "0 22 * * *", agent: "Workspace Agent" },
+    { name: "Twin Reflection", pattern: "0 9 * * 1", agent: "Twin Agent" },
+    { name: "GEPA Optimizer", pattern: "0 5 * * 0", agent: "GEPA Optimizer" },
+    { name: "System Evolution", pattern: "0 6 * * 0", agent: "System Evolution" },
+  ];
+
+  const jobs = CRONS.map(c => {
+    const lastExec = db.prepare(
+      "SELECT created_at, status FROM agent_executions WHERE agent=? ORDER BY created_at DESC LIMIT 1"
+    ).get(c.agent) as any;
+    return {
+      name: c.name,
+      pattern: c.pattern,
+      lastRun: lastExec?.created_at ?? null,
+      lastStatus: lastExec?.status ?? "unknown",
+    };
+  });
+
+  // User-defined crons
+  const userCrons = db.prepare("SELECT * FROM user_crons WHERE user_id=? ORDER BY created_at").all(DEFAULT_USER_ID) as any[];
+
+  res.json({ systemJobs: jobs, userCrons });
+});
+
+// ── Manual Trigger ────────────────────────────────────────────────────────
+router.post("/trigger/:engine", async (req, res) => {
+  const { engine } = req.params;
+  try {
+    switch (engine) {
+      case "dream": {
+        const { runDream } = await import("../memory/dream.js");
+        const stats = await runDream();
+        return res.json({ ok: true, engine, result: stats });
+      }
+      case "evolution": {
+        const { runPersonalEvolution } = await import("../cognition/evolution.js");
+        const result = await runPersonalEvolution();
+        return res.json({ ok: true, engine, result });
+      }
+      case "gepa": {
+        const { analyzeExecutionTraces } = await import("../cognition/gepa.js");
+        const result = await analyzeExecutionTraces(7);
+        return res.json({ ok: true, engine, result });
+      }
+      case "proactive": {
+        const { checkProactiveTriggers } = await import("../orchestration/enforcement.js");
+        const trigger = checkProactiveTriggers();
+        return res.json({ ok: true, engine, result: trigger ?? { reason: "No triggers found" } });
+      }
+      case "portrait": {
+        const { generateSelfPortrait } = await import("../cognition/self-portrait.js");
+        const result = await generateSelfPortrait();
+        return res.json({ ok: true, engine, result });
+      }
+      default:
+        return res.status(400).json({ error: `Unknown engine: ${engine}` });
+    }
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ── Permission Audit Log ──────────────────────────────────────────────────
+router.get("/permissions/audit", (req, res) => {
+  const limit = Math.min(parseInt(req.query.limit as string) || 50, 200);
+  const rows = db.prepare(
+    "SELECT * FROM permission_audit ORDER BY created_at DESC LIMIT ?"
+  ).all(limit);
+  res.json(rows);
+});
+
+// ── Batch Delete Nodes ────────────────────────────────────────────────────
+router.post("/batch-delete", (req, res) => {
+  const { nodeIds } = req.body;
+  if (!Array.isArray(nodeIds) || nodeIds.length === 0) return res.status(400).json({ error: "nodeIds array required" });
+  const tx = db.transaction(() => {
+    for (const id of nodeIds) {
+      db.prepare("DELETE FROM graph_nodes WHERE id=? AND user_id=?").run(id, DEFAULT_USER_ID);
+    }
+  });
+  tx();
+  res.json({ ok: true, deleted: nodeIds.length });
+});
+
+// ── Quality Audit ─────────────────────────────────────────────────────────
+router.get("/quality-audit", (_req, res) => {
+  const orphanNodes = db.prepare(`
+    SELECT n.id, n.label, n.type, n.domain FROM graph_nodes n
+    WHERE n.user_id=? AND NOT EXISTS (
+      SELECT 1 FROM graph_edges e WHERE e.from_node_id=n.id OR e.to_node_id=n.id
+    ) ORDER BY n.created_at DESC LIMIT 50
+  `).all(DEFAULT_USER_ID) as any[];
+
+  const emptyDetail = db.prepare(
+    "SELECT id, label, type, domain FROM graph_nodes WHERE user_id=? AND (detail IS NULL OR detail='' OR length(detail) < 5) LIMIT 50"
+  ).all(DEFAULT_USER_ID) as any[];
+
+  const shortLabels = db.prepare(
+    "SELECT id, label, type, domain FROM graph_nodes WHERE user_id=? AND length(label) < 5 LIMIT 50"
+  ).all(DEFAULT_USER_ID) as any[];
+
+  res.json({ orphanNodes, emptyDetail, shortLabels });
+});
+
 export default router;
