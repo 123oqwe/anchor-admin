@@ -1,29 +1,24 @@
 import { type ReactNode } from "react";
 import { useLocation, Link } from "wouter";
 import {
-  LayoutDashboard, Brain, DollarSign, Activity, FileText,
-  Bot, Clock, Shield, Lock, Network, Database, HardDrive,
-  HeartPulse, ArrowLeft, Terminal,
+  Cpu, Activity, Database, ArrowLeft, Terminal,
+  DollarSign, Zap, Network, Brain, HeartPulse, Route as RouteIcon, ListTodo, Webhook, Share2,
 } from "lucide-react";
 
 const adminNav = [
-  { path: "/admin", label: "Dashboard", icon: LayoutDashboard, group: "Overview" },
-
-  { path: "/admin/models", label: "Models", icon: Brain, group: "AI Operations" },
-  { path: "/admin/costs", label: "Costs", icon: DollarSign, group: "AI Operations" },
-  { path: "/admin/performance", label: "Performance", icon: Activity, group: "AI Operations" },
-  { path: "/admin/logs", label: "LLM Logs", icon: FileText, group: "AI Operations" },
-
-  { path: "/admin/agents", label: "System Agents", icon: Bot, group: "Agent Monitor" },
-  { path: "/admin/crons", label: "Cron Jobs", icon: Clock, group: "Agent Monitor" },
-
-  { path: "/admin/permissions", label: "Permissions", icon: Shield, group: "Trust & Safety" },
-  { path: "/admin/privacy", label: "Privacy", icon: Lock, group: "Trust & Safety" },
-
-  { path: "/admin/graph", label: "Graph", icon: Network, group: "Data" },
-  { path: "/admin/memory", label: "Memory", icon: Database, group: "Data" },
-  { path: "/admin/data", label: "Import/Export", icon: HardDrive, group: "Data" },
-  { path: "/admin/health", label: "System Health", icon: HeartPulse, group: "Data" },
+  { path: "/admin", label: "Cortex", icon: Cpu, group: "AI Layer" },
+  { path: "/admin/costs", label: "Costs", icon: DollarSign, group: "AI Layer" },
+  { path: "/admin/performance", label: "Performance", icon: Zap, group: "AI Layer" },
+  { path: "/admin/logs", label: "Logs", icon: Activity, group: "AI Layer" },
+  { path: "/admin/runs", label: "Run Traces", icon: RouteIcon, group: "AI Layer" },
+  { path: "/admin/jobs", label: "Jobs", icon: ListTodo, group: "AI Layer" },
+  { path: "/admin/missions", label: "Missions", icon: Share2, group: "AI Layer" },
+  { path: "/admin/hooks", label: "Hooks", icon: Webhook, group: "AI Layer" },
+  { path: "/admin/bridges-advanced", label: "Hand Bridge", icon: Zap, group: "AI Layer" },
+  { path: "/admin/health", label: "System Health", icon: HeartPulse, group: "AI Layer" },
+  { path: "/admin/graph", label: "Human Graph", icon: Network, group: "Data Layer" },
+  { path: "/admin/memory", label: "Memory & Twin", icon: Brain, group: "Data Layer" },
+  { path: "/admin/data", label: "Tables", icon: Database, group: "Data Layer" },
 ];
 
 export default function AdminLayout({ children }: { children: ReactNode }) {
