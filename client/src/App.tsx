@@ -31,6 +31,10 @@ import Missions from "./pages/admin/Missions";
 import MissionDetail from "./pages/admin/MissionDetail";
 import Runs from "./pages/admin/Runs";
 import RunTrace from "./pages/admin/RunTrace";
+import Users from "./pages/admin/Users";
+import UserDetail from "./pages/admin/UserDetail";
+import Invites from "./pages/admin/Invites";
+import Audit from "./pages/admin/Audit";
 
 /**
  * Renders children when an admin session is present; otherwise shows the
@@ -67,6 +71,12 @@ function Router() {
       <Route path="/"><Redirect to="/admin" /></Route>
 
       <Route path="/admin"><AdminPage><Overview /></AdminPage></Route>
+
+      {/* Operator essentials (Sprint 5) */}
+      <Route path="/admin/users/:id"><AdminPage><UserDetail /></AdminPage></Route>
+      <Route path="/admin/users"><AdminPage><Users /></AdminPage></Route>
+      <Route path="/admin/invites"><AdminPage><Invites /></AdminPage></Route>
+      <Route path="/admin/audit"><AdminPage><Audit /></AdminPage></Route>
 
       {/* AI Ops */}
       <Route path="/admin/models"><AdminPage><Cortex /></AdminPage></Route>

@@ -295,4 +295,71 @@ export const api = {
     req<any>("POST", `/api/sessions/${sessionId}/steps`, body),
   skipStep: (sessionId: string, stepId: string) =>
     req<any>("DELETE", `/api/sessions/${sessionId}/steps/${stepId}`),
+
+  // ─── Sprint 5 admin-backend (cockpit) ─────────────────────────────────
+  // These talk to anchor-admin-backend (:3002) via the Vite proxy.
+  // Naming kept terse — no `getAdmin*` prefix; the routes already start
+  // with /admin so the call site reads cleanly: api.users(), api.audit().
+
+  // Health & money
+  adminHealth:   () => req<{ usersTotal:number; usersToday:number; runsRunning:number; jobsPending:number; failures24h:number }>("GET", "/api/admin/health"),
+  adminMargin:   (days = 7) => req<{ days:number; stripeRevenueUsd:number; llmSpendUsd:number; marginUsd:number }>("GET", `/api/admin/margin?days=${days}`),
+
+  // Users
+  adminUsers:    () => req<any[]>("GET", "/api/admin/users"),
+  adminUser:     (id: string) => req<any>("GET", `/api/admin/users/${id}`),
+  adminSuspend:  (id: string, reason: string) => req<any>("POST", `/api/admin/users/${id}/suspend`, { reason }),
+  adminRestore:  (id: string) => req<any>("POST", `/api/admin/users/${id}/restore`, {}),
+  adminGrant:    (id: string, credits: number, reason: string) => req<any>("POST", `/api/admin/users/${id}/grant`, { credits, reason }),
+  adminAbortRuns:(id: string) => req<any>("POST", `/api/admin/users/${id}/abort`, {}),
+
+  // Invites
+  adminInvites:        () => req<any[]>("GET", "/api/admin/invites"),
+  adminIssueInvite:    (ttlDays = 30) => req<{ code: string; expiresAt: number | null }>("POST", "/api/admin/invites", { ttlDays }),
+  adminRevokeInvite:   (code: string) => req<any>("DELETE", `/api/admin/invites/${code}`),
+
+  // Audit
+  adminAudit:    (limit = 50) => req<any[]>("GET", `/api/admin/audit?limit=${limit}`),
+
+  // RBAC — Admins
+  adminAdmins:           () => req<any[]>("GET", "/api/admin/admins/"),
+  adminCatalog:          () => req<{ permissions: string[]; roles: { id: string; label: string; description: string; permissions: string[] }[] }>("GET", "/api/admin/admins/catalog"),
+  adminSetPermissions:   (id: string, permissions: string[]) => req<any>("POST", `/api/admin/admins/${id}`, { permissions }),
+  adminRevokeAdmin:      (id: string) => req<any>("DELETE", `/api/admin/admins/${id}`),
+
+  // A/B experiments (read view of anchor-backend's per-user framework)
+  adminExperiments:      () => req<any[]>("GET", "/api/admin/experiments/"),
+  adminExperiment:       (id: string) => req<any>("GET", `/api/admin/experiments/${id}`),
+  adminStopExperiment:   (id: string) => req<any>("POST", `/api/admin/experiments/${id}/stop`, {}),
+
+  // Observability — agent runs / LLM calls / stats
+  adminRuns:           (params: { userId?: string; status?: string; limit?: number } = {}) => {
+    const q = new URLSearchParams();
+    if (params.userId) q.set("userId", params.userId);
+    if (params.status) q.set("status", params.status);
+    if (params.limit)  q.set("limit", String(params.limit));
+    return req<any[]>("GET", `/api/admin/runs${q.toString() ? "?" + q : ""}`);
+  },
+  adminRun:            (id: string) => req<{ run: any; messages: any[]; toolCalls: any[]; llmCalls: any[] }>("GET", `/api/admin/runs/${id}`),
+  adminReplayRun:      (id: string) => req<{ ok: boolean; jobId: string }>("POST", `/api/admin/runs/${id}/replay`, {}),
+  adminLLMCalls:       (params: { userId?: string; runId?: string; modelId?: string; limit?: number } = {}) => {
+    const q = new URLSearchParams();
+    if (params.userId)  q.set("userId", params.userId);
+    if (params.runId)   q.set("runId", params.runId);
+    if (params.modelId) q.set("modelId", params.modelId);
+    if (params.limit)   q.set("limit", String(params.limit));
+    return req<any[]>("GET", `/api/admin/llm-calls${q.toString() ? "?" + q : ""}`);
+  },
+  adminLLMCall:        (id: string) => req<any>("GET", `/api/admin/llm-calls/${id}`),
+  adminStatsAgents:    (days = 7) => req<any[]>("GET", `/api/admin/stats/agents?days=${days}`),
+  adminStatsTools:     (days = 7) => req<any[]>("GET", `/api/admin/stats/tools?days=${days}`),
+  adminStatsCrons:     (days = 7) => req<any[]>("GET", `/api/admin/stats/crons?days=${days}`),
+
+  // Growth
+  adminCohorts:        (weeks = 8) => req<any[]>("GET", `/api/admin/cohorts?weeks=${weeks}`),
+  adminLTV:            () => req<any[]>("GET", "/api/admin/ltv"),
+  adminFunnel:         () => req<{ stage: string; count: number }[]>("GET", "/api/admin/funnel"),
+  adminNotifySegments: () => req<Record<string, number>>("GET", "/api/admin/notify/segments"),
+  adminNotify:         (body: { segment: string; subject: string; html: string }) => req<{ ok: boolean; sent: number; failed: number; total: number }>("POST", "/api/admin/notify", body),
+  adminNotifications:  () => req<any[]>("GET", "/api/admin/notifications"),
 };

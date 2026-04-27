@@ -1,28 +1,30 @@
 import { type ReactNode } from "react";
 import { useLocation, Link } from "wouter";
 import {
-  Cpu, Activity, Database, ArrowLeft, Terminal,
-  DollarSign, Zap, Network, Brain, HeartPulse, Route as RouteIcon, ListTodo, Webhook, Share2,
+  LayoutDashboard, Users as UsersIcon, Key, FileText, ArrowLeft, Terminal,
+  Activity, DollarSign, Zap, HeartPulse, Route as RouteIcon, LogOut,
 } from "lucide-react";
+import { useSession } from "@/lib/auth";
 
+// Items the operator opens daily. Each requires its backend permission;
+// pages render their own empty state when the admin lacks a permission
+// rather than 403'ing them out — better UX for "I have part-access".
 const adminNav = [
-  { path: "/admin", label: "Cortex", icon: Cpu, group: "AI Layer" },
-  { path: "/admin/costs", label: "Costs", icon: DollarSign, group: "AI Layer" },
-  { path: "/admin/performance", label: "Performance", icon: Zap, group: "AI Layer" },
-  { path: "/admin/logs", label: "Logs", icon: Activity, group: "AI Layer" },
-  { path: "/admin/runs", label: "Run Traces", icon: RouteIcon, group: "AI Layer" },
-  { path: "/admin/jobs", label: "Jobs", icon: ListTodo, group: "AI Layer" },
-  { path: "/admin/missions", label: "Missions", icon: Share2, group: "AI Layer" },
-  { path: "/admin/hooks", label: "Hooks", icon: Webhook, group: "AI Layer" },
-  { path: "/admin/bridges-advanced", label: "Hand Bridge", icon: Zap, group: "AI Layer" },
-  { path: "/admin/health", label: "System Health", icon: HeartPulse, group: "AI Layer" },
-  { path: "/admin/graph", label: "Human Graph", icon: Network, group: "Data Layer" },
-  { path: "/admin/memory", label: "Memory & Twin", icon: Brain, group: "Data Layer" },
-  { path: "/admin/data", label: "Tables", icon: Database, group: "Data Layer" },
+  { path: "/admin",            label: "Overview",     icon: LayoutDashboard, group: "Operator" },
+  { path: "/admin/users",      label: "Users",        icon: UsersIcon,       group: "Operator" },
+  { path: "/admin/invites",    label: "Invites",      icon: Key,             group: "Operator" },
+  { path: "/admin/audit",      label: "Audit log",    icon: FileText,        group: "Operator" },
+
+  { path: "/admin/runs",       label: "Run traces",   icon: RouteIcon,       group: "AI Ops" },
+  { path: "/admin/logs",       label: "LLM calls",    icon: Activity,        group: "AI Ops" },
+  { path: "/admin/costs",      label: "Costs",        icon: DollarSign,      group: "AI Ops" },
+  { path: "/admin/performance",label: "Performance",  icon: Zap,             group: "AI Ops" },
+  { path: "/admin/health",     label: "System health",icon: HeartPulse,      group: "AI Ops" },
 ];
 
 export default function AdminLayout({ children }: { children: ReactNode }) {
   const [location] = useLocation();
+  const { user, logout } = useSession();
 
   // Group nav items
   const grouped = adminNav.reduce((acc, item) => {
@@ -69,13 +71,19 @@ export default function AdminLayout({ children }: { children: ReactNode }) {
           ))}
         </nav>
 
-        <div className="px-3 pb-4 border-t border-border/30 pt-3">
-          <Link href="/dashboard">
-            <div className="flex items-center gap-2 rounded-md px-3 py-2 text-xs text-muted-foreground hover:text-foreground hover:bg-accent transition-colors">
-              <ArrowLeft className="h-3 w-3" />
-              Back to Anchor
+        <div className="px-3 pb-4 border-t border-border/30 pt-3 space-y-2">
+          {user && (
+            <div className="px-3 text-[10px] text-muted-foreground truncate" title={user.email}>
+              {user.email}
             </div>
-          </Link>
+          )}
+          <button
+            onClick={() => logout()}
+            className="w-full flex items-center gap-2 rounded-md px-3 py-2 text-xs text-muted-foreground hover:text-foreground hover:bg-accent transition-colors"
+          >
+            <LogOut className="h-3 w-3" />
+            Sign out
+          </button>
         </div>
       </aside>
 
