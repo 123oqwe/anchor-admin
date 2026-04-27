@@ -1,8 +1,9 @@
 import { type ReactNode } from "react";
 import { useLocation, Link } from "wouter";
 import {
-  LayoutDashboard, Users as UsersIcon, Key, FileText, ArrowLeft, Terminal,
+  LayoutDashboard, Users as UsersIcon, Key, FileText, Terminal,
   Activity, DollarSign, Zap, HeartPulse, Route as RouteIcon, LogOut,
+  ShieldCheck, FlaskConical, TrendingUp, Send,
 } from "lucide-react";
 import { useSession } from "@/lib/auth";
 
@@ -20,6 +21,12 @@ const adminNav = [
   { path: "/admin/costs",      label: "Costs",        icon: DollarSign,      group: "AI Ops" },
   { path: "/admin/performance",label: "Performance",  icon: Zap,             group: "AI Ops" },
   { path: "/admin/health",     label: "System health",icon: HeartPulse,      group: "AI Ops" },
+
+  { path: "/admin/admins",     label: "Admins",       icon: ShieldCheck,     group: "Trust" },
+  { path: "/admin/experiments",label: "A/B tests",    icon: FlaskConical,    group: "Trust" },
+
+  { path: "/admin/growth",     label: "Growth",       icon: TrendingUp,      group: "Growth" },
+  { path: "/admin/notify",     label: "Notify",       icon: Send,            group: "Growth" },
 ];
 
 export default function AdminLayout({ children }: { children: ReactNode }) {

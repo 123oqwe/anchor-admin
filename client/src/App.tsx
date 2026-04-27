@@ -35,6 +35,10 @@ import Users from "./pages/admin/Users";
 import UserDetail from "./pages/admin/UserDetail";
 import Invites from "./pages/admin/Invites";
 import Audit from "./pages/admin/Audit";
+import Admins from "./pages/admin/Admins";
+import Experiments from "./pages/admin/Experiments";
+import Notify from "./pages/admin/Notify";
+import Growth from "./pages/admin/Growth";
 
 /**
  * Renders children when an admin session is present; otherwise shows the
@@ -77,6 +81,10 @@ function Router() {
       <Route path="/admin/users"><AdminPage><Users /></AdminPage></Route>
       <Route path="/admin/invites"><AdminPage><Invites /></AdminPage></Route>
       <Route path="/admin/audit"><AdminPage><Audit /></AdminPage></Route>
+      <Route path="/admin/admins"><AdminPage><Admins /></AdminPage></Route>
+      <Route path="/admin/experiments"><AdminPage><Experiments /></AdminPage></Route>
+      <Route path="/admin/notify"><AdminPage><Notify /></AdminPage></Route>
+      <Route path="/admin/growth"><AdminPage><Growth /></AdminPage></Route>
 
       {/* AI Ops */}
       <Route path="/admin/models"><AdminPage><Cortex /></AdminPage></Route>
