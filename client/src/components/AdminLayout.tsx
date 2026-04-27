@@ -2,7 +2,7 @@ import { type ReactNode } from "react";
 import { useLocation, Link } from "wouter";
 import {
   LayoutDashboard, Users as UsersIcon, Key, FileText, Terminal,
-  Activity, DollarSign, Zap, HeartPulse, Route as RouteIcon, LogOut,
+  Activity, BarChart3, Route as RouteIcon, LogOut,
   ShieldCheck, FlaskConical, TrendingUp, Send,
 } from "lucide-react";
 import { useSession } from "@/lib/auth";
@@ -10,6 +10,11 @@ import { useSession } from "@/lib/auth";
 // Items the operator opens daily. Each requires its backend permission;
 // pages render their own empty state when the admin lacks a permission
 // rather than 403'ing them out — better UX for "I have part-access".
+//
+// Trimmed in 5.E.4: dropped Costs, Performance, System Health from the
+// nav. Costs+Health are subsumed by the Overview page; Performance was
+// a single SQL view that admin-backend doesn't expose. The page files
+// stay so /admin/costs etc still resolve if someone bookmarks them.
 const adminNav = [
   { path: "/admin",            label: "Overview",     icon: LayoutDashboard, group: "Operator" },
   { path: "/admin/users",      label: "Users",        icon: UsersIcon,       group: "Operator" },
@@ -18,9 +23,7 @@ const adminNav = [
 
   { path: "/admin/runs",       label: "Run traces",   icon: RouteIcon,       group: "AI Ops" },
   { path: "/admin/logs",       label: "LLM calls",    icon: Activity,        group: "AI Ops" },
-  { path: "/admin/costs",      label: "Costs",        icon: DollarSign,      group: "AI Ops" },
-  { path: "/admin/performance",label: "Performance",  icon: Zap,             group: "AI Ops" },
-  { path: "/admin/health",     label: "System health",icon: HeartPulse,      group: "AI Ops" },
+  { path: "/admin/stats",      label: "Stats",        icon: BarChart3,       group: "AI Ops" },
 
   { path: "/admin/admins",     label: "Admins",       icon: ShieldCheck,     group: "Trust" },
   { path: "/admin/experiments",label: "A/B tests",    icon: FlaskConical,    group: "Trust" },

@@ -9,7 +9,7 @@ function CallDetail({ id, onClose }: { id: string; onClose: () => void }) {
   const [copied, setCopied] = useState<string | null>(null);
 
   useEffect(() => {
-    api.getCallDetail(id).then(setCall).catch(() => {});
+    api.adminLLMCall(id).then(setCall).catch(() => {});
   }, [id]);
 
   const copy = (text: string, label: string) => {
@@ -91,7 +91,13 @@ export default function Logs() {
   const [selectedId, setSelectedId] = useState<string | null>(null);
 
   const refresh = async () => {
-    const [c, e] = await Promise.all([api.getCalls(100), api.getExecutions()]);
+    // adminLLMCalls returns the same field shape as the legacy /admin/calls.
+    // Executions stay legacy-API for now; admin-backend doesn't surface them
+    // and they're going away from this page when Stats lands.
+    const [c, e] = await Promise.all([
+      api.adminLLMCalls({ limit: 100 }).catch(() => []),
+      api.getExecutions().catch(() => []),
+    ]);
     setCalls(c); setExecutions(e); setLoading(false);
   };
 

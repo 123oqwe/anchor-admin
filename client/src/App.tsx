@@ -39,6 +39,7 @@ import Admins from "./pages/admin/Admins";
 import Experiments from "./pages/admin/Experiments";
 import Notify from "./pages/admin/Notify";
 import Growth from "./pages/admin/Growth";
+import Stats from "./pages/admin/Stats";
 
 /**
  * Renders children when an admin session is present; otherwise shows the
@@ -85,6 +86,7 @@ function Router() {
       <Route path="/admin/experiments"><AdminPage><Experiments /></AdminPage></Route>
       <Route path="/admin/notify"><AdminPage><Notify /></AdminPage></Route>
       <Route path="/admin/growth"><AdminPage><Growth /></AdminPage></Route>
+      <Route path="/admin/stats"><AdminPage><Stats /></AdminPage></Route>
 
       {/* AI Ops */}
       <Route path="/admin/models"><AdminPage><Cortex /></AdminPage></Route>
