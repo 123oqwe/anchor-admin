@@ -40,6 +40,15 @@ import Experiments from "./pages/admin/Experiments";
 import Notify from "./pages/admin/Notify";
 import Growth from "./pages/admin/Growth";
 import Stats from "./pages/admin/Stats";
+import Security from "./pages/admin/Security";
+import SecurityAlerts from "./pages/admin/SecurityAlerts";
+import SecurityPentest from "./pages/admin/SecurityPentest";
+import SecurityFindings from "./pages/admin/SecurityFindings";
+import SecurityForensics from "./pages/admin/SecurityForensics";
+import SecurityBlocklist from "./pages/admin/SecurityBlocklist";
+import Plugins from "./pages/admin/Plugins";
+import PluginDetail from "./pages/admin/PluginDetail";
+import PluginInstall from "./pages/admin/PluginInstall";
 
 /**
  * Renders children when an admin session is present; otherwise shows the
@@ -107,6 +116,19 @@ function Router() {
       {/* Trust */}
       <Route path="/admin/permissions"><AdminPage><AdminPermissions /></AdminPage></Route>
       <Route path="/admin/privacy"><AdminPage><AdminPrivacy /></AdminPage></Route>
+
+      {/* Security */}
+      <Route path="/admin/security"><AdminPage><Security /></AdminPage></Route>
+      <Route path="/admin/security/alerts"><AdminPage><SecurityAlerts /></AdminPage></Route>
+      <Route path="/admin/security/pentest"><AdminPage><SecurityPentest /></AdminPage></Route>
+      <Route path="/admin/security/findings"><AdminPage><SecurityFindings /></AdminPage></Route>
+      <Route path="/admin/security/forensics"><AdminPage><SecurityForensics /></AdminPage></Route>
+      <Route path="/admin/security/blocklist"><AdminPage><SecurityBlocklist /></AdminPage></Route>
+
+      {/* Plugins */}
+      <Route path="/admin/plugins"><AdminPage><Plugins /></AdminPage></Route>
+      <Route path="/admin/plugins/install"><AdminPage><PluginInstall /></AdminPage></Route>
+      <Route path="/admin/plugins/:name"><AdminPage><PluginDetail /></AdminPage></Route>
 
       {/* Data */}
       <Route path="/admin/graph"><AdminPage><GraphAdmin /></AdminPage></Route>

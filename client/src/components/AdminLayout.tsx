@@ -4,6 +4,7 @@ import {
   LayoutDashboard, Users as UsersIcon, Key, FileText, Terminal,
   Activity, BarChart3, Route as RouteIcon, LogOut,
   ShieldCheck, FlaskConical, TrendingUp, Send,
+  ShieldAlert, Bug, Search, Ban, Package,
 } from "lucide-react";
 import { useSession } from "@/lib/auth";
 
@@ -30,6 +31,15 @@ const adminNav = [
 
   { path: "/admin/growth",     label: "Growth",       icon: TrendingUp,      group: "Growth" },
   { path: "/admin/notify",     label: "Notify",       icon: Send,            group: "Growth" },
+
+  { path: "/admin/security",           label: "Overview",  icon: ShieldAlert, group: "Security" },
+  { path: "/admin/security/alerts",    label: "Alerts",    icon: Activity,    group: "Security" },
+  { path: "/admin/security/findings",  label: "Findings",  icon: Search,      group: "Security" },
+  { path: "/admin/security/forensics", label: "Forensics", icon: FileText,    group: "Security" },
+  { path: "/admin/security/blocklist", label: "Blocklist", icon: Ban,         group: "Security" },
+  { path: "/admin/security/pentest",   label: "Pentest",   icon: Bug,         group: "Security" },
+
+  { path: "/admin/plugins", label: "Catalog", icon: Package, group: "Plugins" },
 ];
 
 export default function AdminLayout({ children }: { children: ReactNode }) {

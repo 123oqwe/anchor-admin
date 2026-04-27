@@ -362,4 +362,30 @@ export const api = {
   adminNotifySegments: () => req<Record<string, number>>("GET", "/api/admin/notify/segments"),
   adminNotify:         (body: { segment: string; subject: string; html: string }) => req<{ ok: boolean; sent: number; failed: number; total: number }>("POST", "/api/admin/notify", body),
   adminNotifications:  () => req<any[]>("GET", "/api/admin/notifications"),
+
+  // Security (proxied by admin-backend → anchor-security)
+  secOverview:    () => req<{ alertsOpen: number; alertsBySeverity: Record<string, number>; findings24h: number; lastPentest: any | null }>("GET", "/api/security/overview"),
+  secAlerts:      (status?: string) => req<any[]>("GET", `/api/security/alerts${status ? `?status=${status}` : ""}`),
+  secAckAlert:    (id: string) => req<{ ok: boolean }>("POST", `/api/security/alerts/${id}/ack`),
+  secResolveAlert:(id: string) => req<{ ok: boolean }>("POST", `/api/security/alerts/${id}/resolve`),
+  secRunDetect:   () => req<{ ran: { name: string; ok: boolean; error?: string }[] }>("POST", "/api/security/alerts/run-now"),
+  secFindings:    (detector?: string) => req<any[]>("GET", `/api/security/findings${detector ? `?detector=${detector}` : ""}`),
+  secPentestCatalog: () => req<{ name: string; category: string; difficulty: string; description: string }[]>("GET", "/api/security/pentest/catalog"),
+  secPentestRuns: () => req<any[]>("GET", "/api/security/pentest/runs"),
+  secPentestRun:  (id: string) => req<{ run: any; results: any[] }>("GET", `/api/security/pentest/runs/${id}`),
+  secRunPentest:  (difficulty?: ("easy"|"medium"|"hard")[]) => req<{ enqueued: boolean }>("POST", "/api/security/pentest/run", difficulty ? { difficulty } : {}),
+
+  // Forensics + blocklist
+  secForensicsUser:   (userId: string) => req<{ user: any; sessions: any[]; runs: any[]; calls: any[]; alerts: any[]; ledger: any[] }>("GET", `/api/security/forensics/user/${userId}`),
+  secForensicsSearch: (q: string) => req<{ alerts: any[]; messages: any[]; runs: any[] }>("GET", `/api/security/forensics/search?q=${encodeURIComponent(q)}`),
+  secBlocklistList:   () => req<any[]>("GET", "/api/admin/blocklist"),
+  secBlocklistAdd:    (body: { ip: string; reason: string; expiresInHours?: number }) => req<{ ok: boolean }>("POST", "/api/admin/blocklist", body),
+  secBlocklistRemove: (ip: string) => req<{ ok: boolean }>("DELETE", `/api/admin/blocklist/${ip}`),
+
+  // Plugins (proxied by admin-backend → anchor-backend)
+  pluginList:    () => req<any[]>("GET", "/api/admin/plugins"),
+  pluginGet:     (name: string) => req<any>("GET", `/api/admin/plugins/${name}`),
+  pluginPreview: (source: string) => req<{ manifest?: any; error?: string }>("POST", "/api/admin/plugins/preview", { source }),
+  pluginInstall: (source: string) => req<{ ok: boolean; name: string; version: string }>("POST", "/api/admin/plugins/install", { source }),
+  pluginUninstall:(name: string) => req<{ ok: boolean; swept: number }>("DELETE", `/api/admin/plugins/${name}`),
 };
