@@ -8,11 +8,26 @@ const BASE = "";
  */
 export const UNAUTHENTICATED_EVENT = "anchor:unauthenticated";
 
+/** Read the CSRF cookie set by admin-backend (FIX-11). */
+function csrfToken(): string {
+  const m = document.cookie.match(/(?:^|;\s*)anchor_csrf=([^;]+)/);
+  return m?.[1] ?? "";
+}
+
 async function req<T>(method: string, path: string, body?: unknown): Promise<T> {
+  const headers: Record<string, string> = {};
+  if (body) headers["Content-Type"] = "application/json";
+  // FIX-11: double-submit CSRF — attach the cookie's value as a header on
+  // every state-changing request. GET/HEAD/OPTIONS are skipped server-side
+  // but we send the token unconditionally so a request that morphs from
+  // safe → unsafe never breaks.
+  const token = csrfToken();
+  if (token) headers["X-CSRF-Token"] = token;
+
   const res = await fetch(`${BASE}${path}`, {
     method,
     credentials: "include",
-    headers: body ? { "Content-Type": "application/json" } : {},
+    headers,
     body: body ? JSON.stringify(body) : undefined,
   });
   if (res.status === 401) {
