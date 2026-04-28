@@ -407,4 +407,27 @@ export const api = {
     return req<any[]>("GET", `/api/admin/guardrails${q ? `?${q}` : ""}`);
   },
   guardrailSummary: () => req<{ detector: string; verdict: string; n: number }[]>("GET", "/api/admin/guardrails/summary"),
+
+  // Model catalog (Phase 1) — 200+ models from OpenRouter
+  catalogList:        (params: Record<string, string | boolean> = {}) => {
+    const q = new URLSearchParams();
+    for (const [k, v] of Object.entries(params)) if (v !== "" && v !== false) q.set(k, v === true ? "1" : String(v));
+    const s = q.toString();
+    return req<any[]>("GET", `/api/admin/catalog${s ? `?${s}` : ""}`);
+  },
+  catalogFamilies:    () => req<{ family: string; n: number }[]>("GET", "/api/admin/catalog/families"),
+  catalogLastSynced:  () => req<{ lastSyncedAt: string | null }>("GET", "/api/admin/catalog/last-synced"),
+  catalogSetPreferred:(id: string, preferred: boolean) => req<{ ok: boolean }>("POST", `/api/admin/catalog/${encodeURIComponent(id)}/preferred`, { preferred }),
+  catalogSetStatus:   (id: string, status: string) => req<{ ok: boolean }>("POST", `/api/admin/catalog/${encodeURIComponent(id)}/status`, { status }),
+  catalogSync:        () => req<{ fetched: number; parsed: number; rejected: number; inserted: number; updated: number }>("POST", "/api/admin/catalog/sync"),
+
+  // Routing rules (Phase 2)
+  routingList:        () => req<any[]>("GET", "/api/admin/routing"),
+  routingGet:         (task: string) => req<any>("GET", `/api/admin/routing/${task}`),
+  routingUpsert:      (task: string, rule: { primary_model: string; fallback_chain: string[]; max_cost_per_call_usd: number | null; required_capabilities: string[]; notes?: string | null }) =>
+                      req<{ ok: boolean }>("PUT", `/api/admin/routing/${task}`, rule),
+  routingDelete:      (task: string) => req<{ ok: boolean }>("DELETE", `/api/admin/routing/${task}`),
+
+  // Model health (Phase 3)
+  modelsHealth:       () => req<any[]>("GET", "/api/admin/models/health"),
 };

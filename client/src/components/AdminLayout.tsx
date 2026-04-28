@@ -27,6 +27,9 @@ const adminNav = [
   { path: "/admin/cache",      label: "Cache",        icon: Database,        group: "AI Ops" },
   { path: "/admin/logs",       label: "LLM calls",    icon: Activity,        group: "AI Ops" },
   { path: "/admin/stats",      label: "Stats",        icon: BarChart3,       group: "AI Ops" },
+  { path: "/admin/models",        label: "Models",      icon: Database,        group: "AI Ops" },
+  { path: "/admin/models/health", label: "Health",      icon: Activity,        group: "AI Ops" },
+  { path: "/admin/routing",       label: "Routing",     icon: Filter,          group: "AI Ops" },
 
   { path: "/admin/admins",     label: "Admins",       icon: ShieldCheck,     group: "Trust" },
   { path: "/admin/experiments",label: "A/B tests",    icon: FlaskConical,    group: "Trust" },

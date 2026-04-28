@@ -52,6 +52,9 @@ import PluginInstall from "./pages/admin/PluginInstall";
 import Traces from "./pages/admin/Traces";
 import Cache from "./pages/admin/Cache";
 import SecurityGuardrails from "./pages/admin/SecurityGuardrails";
+import Models from "./pages/admin/Models";
+import ModelHealth from "./pages/admin/ModelHealth";
+import Routing from "./pages/admin/Routing";
 
 /**
  * Renders children when an admin session is present; otherwise shows the
@@ -137,6 +140,11 @@ function Router() {
       <Route path="/admin/traces"><AdminPage><Traces /></AdminPage></Route>
       <Route path="/admin/cache"><AdminPage><Cache /></AdminPage></Route>
       <Route path="/admin/security/guardrails"><AdminPage><SecurityGuardrails /></AdminPage></Route>
+
+      {/* Integrated Model Platform */}
+      <Route path="/admin/models"><AdminPage><Models /></AdminPage></Route>
+      <Route path="/admin/models/health"><AdminPage><ModelHealth /></AdminPage></Route>
+      <Route path="/admin/routing"><AdminPage><Routing /></AdminPage></Route>
 
       {/* Data */}
       <Route path="/admin/graph"><AdminPage><GraphAdmin /></AdminPage></Route>
