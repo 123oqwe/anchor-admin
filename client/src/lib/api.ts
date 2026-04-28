@@ -388,4 +388,23 @@ export const api = {
   pluginPreview: (source: string) => req<{ manifest?: any; error?: string }>("POST", "/api/admin/plugins/preview", { source }),
   pluginInstall: (source: string) => req<{ ok: boolean; name: string; version: string }>("POST", "/api/admin/plugins/install", { source }),
   pluginUninstall:(name: string) => req<{ ok: boolean; swept: number }>("DELETE", `/api/admin/plugins/${name}`),
+
+  // Traces (Portkey-style filterable LLM call list)
+  traceList:    (params: Record<string, string | number> = {}) => {
+    const q = new URLSearchParams(Object.entries(params).map(([k, v]) => [k, String(v)])).toString();
+    return req<any[]>("GET", `/api/admin/traces${q ? `?${q}` : ""}`);
+  },
+  traceGet:     (id: string) => req<any>("GET", `/api/admin/traces/${id}`),
+
+  // Cache observability
+  cacheStats:   () => req<{ entries: number; totalHits: number; costSavedUsd: number; byTask: any[] }>("GET", "/api/admin/cache"),
+  cacheEntries: () => req<any[]>("GET", "/api/admin/cache/entries"),
+  cacheClear:   () => req<{ ok: boolean; rowsRemoved: number }>("POST", "/api/admin/cache/clear"),
+
+  // Guardrails
+  guardrailList:    (params: { detector?: string; verdict?: string; user_id?: string; task?: string } = {}) => {
+    const q = new URLSearchParams(Object.entries(params).filter(([, v]) => v).map(([k, v]) => [k, String(v)])).toString();
+    return req<any[]>("GET", `/api/admin/guardrails${q ? `?${q}` : ""}`);
+  },
+  guardrailSummary: () => req<{ detector: string; verdict: string; n: number }[]>("GET", "/api/admin/guardrails/summary"),
 };

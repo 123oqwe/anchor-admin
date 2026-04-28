@@ -4,7 +4,7 @@ import {
   LayoutDashboard, Users as UsersIcon, Key, FileText, Terminal,
   Activity, BarChart3, Route as RouteIcon, LogOut,
   ShieldCheck, FlaskConical, TrendingUp, Send,
-  ShieldAlert, Bug, Search, Ban, Package,
+  ShieldAlert, Bug, Search, Ban, Package, Database, Filter,
 } from "lucide-react";
 import { useSession } from "@/lib/auth";
 
@@ -23,6 +23,8 @@ const adminNav = [
   { path: "/admin/audit",      label: "Audit log",    icon: FileText,        group: "Operator" },
 
   { path: "/admin/runs",       label: "Run traces",   icon: RouteIcon,       group: "AI Ops" },
+  { path: "/admin/traces",     label: "LLM traces",   icon: Filter,          group: "AI Ops" },
+  { path: "/admin/cache",      label: "Cache",        icon: Database,        group: "AI Ops" },
   { path: "/admin/logs",       label: "LLM calls",    icon: Activity,        group: "AI Ops" },
   { path: "/admin/stats",      label: "Stats",        icon: BarChart3,       group: "AI Ops" },
 
@@ -35,6 +37,7 @@ const adminNav = [
   { path: "/admin/security",           label: "Overview",  icon: ShieldAlert, group: "Security" },
   { path: "/admin/security/alerts",    label: "Alerts",    icon: Activity,    group: "Security" },
   { path: "/admin/security/findings",  label: "Findings",  icon: Search,      group: "Security" },
+  { path: "/admin/security/guardrails",label: "Guardrails",icon: ShieldAlert, group: "Security" },
   { path: "/admin/security/forensics", label: "Forensics", icon: FileText,    group: "Security" },
   { path: "/admin/security/blocklist", label: "Blocklist", icon: Ban,         group: "Security" },
   { path: "/admin/security/pentest",   label: "Pentest",   icon: Bug,         group: "Security" },

@@ -49,6 +49,9 @@ import SecurityBlocklist from "./pages/admin/SecurityBlocklist";
 import Plugins from "./pages/admin/Plugins";
 import PluginDetail from "./pages/admin/PluginDetail";
 import PluginInstall from "./pages/admin/PluginInstall";
+import Traces from "./pages/admin/Traces";
+import Cache from "./pages/admin/Cache";
+import SecurityGuardrails from "./pages/admin/SecurityGuardrails";
 
 /**
  * Renders children when an admin session is present; otherwise shows the
@@ -129,6 +132,11 @@ function Router() {
       <Route path="/admin/plugins"><AdminPage><Plugins /></AdminPage></Route>
       <Route path="/admin/plugins/install"><AdminPage><PluginInstall /></AdminPage></Route>
       <Route path="/admin/plugins/:name"><AdminPage><PluginDetail /></AdminPage></Route>
+
+      {/* Portkey-style observability */}
+      <Route path="/admin/traces"><AdminPage><Traces /></AdminPage></Route>
+      <Route path="/admin/cache"><AdminPage><Cache /></AdminPage></Route>
+      <Route path="/admin/security/guardrails"><AdminPage><SecurityGuardrails /></AdminPage></Route>
 
       {/* Data */}
       <Route path="/admin/graph"><AdminPage><GraphAdmin /></AdminPage></Route>
