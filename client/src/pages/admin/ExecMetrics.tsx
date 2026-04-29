@@ -57,6 +57,22 @@ interface RuntimeCache {
   capturedAt: string;
 }
 
+interface ToolLatency {
+  tool: string;
+  totalCalls: number;
+  sampleSize: number;
+  p50: number;
+  p95: number;
+  p99: number;
+  max: number;
+  mean: number;
+}
+
+interface ToolLatencyData {
+  tools: ToolLatency[];
+  capturedAt: string;
+}
+
 function fmtTokens(n: number) {
   if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(1)}M`;
   if (n >= 1_000) return `${(n / 1_000).toFixed(1)}K`;
@@ -68,17 +84,19 @@ export default function ExecMetrics() {
   const [stats, setStats] = useState<Stats | null>(null);
   const [series, setSeries] = useState<Bucket[]>([]);
   const [runtime, setRuntime] = useState<RuntimeCache | null>(null);
+  const [latency, setLatency] = useState<ToolLatencyData | null>(null);
   const [loading, setLoading] = useState(true);
   const [clearing, setClearing] = useState(false);
 
   const reload = async () => {
     try {
-      const [s, t, r] = await Promise.all([
+      const [s, t, r, l] = await Promise.all([
         api.execCacheMetrics(),
         api.execCacheTimeseries(),
         api.execRuntimeCache().catch(() => null),
+        api.execToolLatency().catch(() => null),
       ]);
-      setStats(s); setSeries(t); setRuntime(r);
+      setStats(s); setSeries(t); setRuntime(r); setLatency(l);
     } finally {
       setLoading(false);
     }
@@ -252,6 +270,52 @@ export default function ExecMetrics() {
         <div className="text-[10px] text-muted-foreground/70 mt-2">
           tool-result = EXEC-2 (web_search / read_url etc.); guardrail = EXEC-5
           (Haiku verdict cache). Stats reset on anchor-backend restart.
+        </div>
+      </div>
+
+      <div className="glass rounded-xl p-4">
+        <div className="flex items-baseline justify-between mb-2">
+          <h2 className="text-xs uppercase tracking-wider text-muted-foreground">
+            Tool latency (p50 / p95 / p99)
+          </h2>
+          <span className="text-[10px] text-muted-foreground/60">
+            {latency ? `captured ${new Date(latency.capturedAt).toLocaleTimeString()}` : "—"}
+          </span>
+        </div>
+        {!latency ? (
+          <div className="text-center py-4 text-xs text-muted-foreground">anchor-backend unreachable.</div>
+        ) : latency.tools.length === 0 ? (
+          <div className="text-center py-4 text-xs text-muted-foreground">No tool calls recorded yet.</div>
+        ) : (
+          <table className="w-full text-xs">
+            <thead><tr className="text-[10px] text-muted-foreground uppercase tracking-wider">
+              <th className="text-left pb-1">Tool</th>
+              <th className="text-right pb-1">Calls</th>
+              <th className="text-right pb-1">p50</th>
+              <th className="text-right pb-1">p95</th>
+              <th className="text-right pb-1">p99</th>
+              <th className="text-right pb-1">Max</th>
+            </tr></thead>
+            <tbody>
+              {latency.tools.map(t => (
+                <tr key={t.tool} className="border-t border-white/5">
+                  <td className="py-1.5 font-mono">{t.tool}</td>
+                  <td className="py-1.5 text-right tabular-nums">{t.totalCalls}</td>
+                  <td className="py-1.5 text-right tabular-nums text-muted-foreground">{t.p50}ms</td>
+                  <td className={`py-1.5 text-right tabular-nums ${t.p95 > 5000 ? "text-red-400" : t.p95 > 1500 ? "text-amber-400" : ""}`}>
+                    {t.p95}ms
+                  </td>
+                  <td className={`py-1.5 text-right tabular-nums ${t.p99 > 10000 ? "text-red-400" : t.p99 > 3000 ? "text-amber-400" : ""}`}>
+                    {t.p99}ms
+                  </td>
+                  <td className="py-1.5 text-right tabular-nums text-muted-foreground/80">{t.max}ms</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        )}
+        <div className="text-[10px] text-muted-foreground/70 mt-2">
+          Sorted by p95 desc — slow tools surface first. p95 &gt; 1.5s = amber, &gt; 5s = red. Reservoir of 500 samples per tool.
         </div>
       </div>
     </div>

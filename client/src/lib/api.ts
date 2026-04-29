@@ -422,6 +422,8 @@ export const api = {
   // EXEC-2/5: in-process tool result + guardrail verdict caches
   execRuntimeCache:      () => req<{ namespaces: any[]; capturedAt: string }>("GET", "/api/admin/exec/runtime-cache-stats"),
   execRuntimeCacheClear: () => req<{ ok: boolean; dropped: number }>("POST", "/api/admin/exec/runtime-cache-clear"),
+  // O1: per-tool latency p50/p95/p99
+  execToolLatency:       () => req<{ tools: any[]; capturedAt: string }>("GET", "/api/admin/exec/tool-latency"),
 
   // Guardrails
   guardrailList:    (params: { detector?: string; verdict?: string; user_id?: string; task?: string } = {}) => {
