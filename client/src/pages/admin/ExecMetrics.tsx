@@ -42,6 +42,20 @@ interface Bucket {
   estSavedUsd: number;
 }
 
+interface RuntimeNamespace {
+  namespace: string;
+  size: number;
+  hits: number;
+  misses: number;
+  evictions: number;
+  hitRate: number;
+}
+
+interface RuntimeCache {
+  namespaces: RuntimeNamespace[];
+  capturedAt: string;
+}
+
 function fmtTokens(n: number) {
   if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(1)}M`;
   if (n >= 1_000) return `${(n / 1_000).toFixed(1)}K`;
@@ -51,12 +65,17 @@ function fmtTokens(n: number) {
 export default function ExecMetrics() {
   const [stats, setStats] = useState<Stats | null>(null);
   const [series, setSeries] = useState<Bucket[]>([]);
+  const [runtime, setRuntime] = useState<RuntimeCache | null>(null);
   const [loading, setLoading] = useState(true);
 
   const reload = async () => {
     try {
-      const [s, t] = await Promise.all([api.execCacheMetrics(), api.execCacheTimeseries()]);
-      setStats(s); setSeries(t);
+      const [s, t, r] = await Promise.all([
+        api.execCacheMetrics(),
+        api.execCacheTimeseries(),
+        api.execRuntimeCache().catch(() => null),
+      ]);
+      setStats(s); setSeries(t); setRuntime(r);
     } finally {
       setLoading(false);
     }
@@ -153,6 +172,55 @@ export default function ExecMetrics() {
         $-saved estimate uses Sonnet input rate ($3/M) × 0.9 (cache discount).
         Actual savings depend on the routed model. Cache TTL is Anthropic's
         ephemeral 5-minute window — low-frequency tasks will show 0% hit rate.
+      </div>
+
+      <div className="glass rounded-xl p-4">
+        <div className="flex items-baseline justify-between mb-2">
+          <h2 className="text-xs uppercase tracking-wider text-muted-foreground">
+            Runtime caches (in-process)
+          </h2>
+          <span className="text-[10px] text-muted-foreground/60">
+            {runtime ? `captured ${new Date(runtime.capturedAt).toLocaleTimeString()}` : "—"}
+          </span>
+        </div>
+        {!runtime ? (
+          <div className="text-center py-4 text-xs text-muted-foreground">
+            anchor-backend unreachable.
+          </div>
+        ) : runtime.namespaces.length === 0 ? (
+          <div className="text-center py-4 text-xs text-muted-foreground">
+            No cache activity yet (LRU is per-process, resets on restart).
+          </div>
+        ) : (
+          <table className="w-full text-xs">
+            <thead><tr className="text-[10px] text-muted-foreground uppercase tracking-wider">
+              <th className="text-left pb-1">Namespace</th>
+              <th className="text-right pb-1">Entries</th>
+              <th className="text-right pb-1">Hits</th>
+              <th className="text-right pb-1">Misses</th>
+              <th className="text-right pb-1">Evicted</th>
+              <th className="text-right pb-1">Hit rate</th>
+            </tr></thead>
+            <tbody>
+              {runtime.namespaces.map(n => (
+                <tr key={n.namespace} className="border-t border-white/5">
+                  <td className="py-1.5 font-mono">{n.namespace}</td>
+                  <td className="py-1.5 text-right tabular-nums">{n.size}</td>
+                  <td className="py-1.5 text-right tabular-nums text-amber-400">{n.hits}</td>
+                  <td className="py-1.5 text-right tabular-nums text-muted-foreground">{n.misses}</td>
+                  <td className="py-1.5 text-right tabular-nums text-muted-foreground">{n.evictions}</td>
+                  <td className={`py-1.5 text-right tabular-nums ${n.hitRate > 0.3 ? "text-emerald-400" : "text-muted-foreground"}`}>
+                    {(n.hitRate * 100).toFixed(1)}%
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        )}
+        <div className="text-[10px] text-muted-foreground/70 mt-2">
+          tool-result = EXEC-2 (web_search / read_url etc.); guardrail = EXEC-5
+          (Haiku verdict cache). Stats reset on anchor-backend restart.
+        </div>
       </div>
     </div>
   );

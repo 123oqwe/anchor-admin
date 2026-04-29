@@ -419,6 +419,8 @@ export const api = {
   // EXEC-1: prompt-cache (Anthropic ephemeral) observability
   execCacheMetrics:    (hours = 24) => req<any>("GET", `/api/admin/exec/cache-metrics?hours=${hours}`),
   execCacheTimeseries: (hours = 24) => req<any[]>("GET", `/api/admin/exec/cache-metrics/timeseries?hours=${hours}`),
+  // EXEC-2/5: in-process tool result + guardrail verdict caches
+  execRuntimeCache:    () => req<{ namespaces: any[]; capturedAt: string }>("GET", "/api/admin/exec/runtime-cache-stats"),
 
   // Guardrails
   guardrailList:    (params: { detector?: string; verdict?: string; user_id?: string; task?: string } = {}) => {
