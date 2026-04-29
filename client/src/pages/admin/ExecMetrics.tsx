@@ -10,9 +10,10 @@
  * way, the page is the fastest signal we'd have.
  */
 import { useEffect, useState } from "react";
-import { Loader2, Zap } from "lucide-react";
+import { Loader2, Zap, Trash2 } from "lucide-react";
 import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer } from "recharts";
 import { api } from "@/lib/api";
+import { useSession } from "@/lib/auth";
 
 interface Stats {
   windowHours: number;
@@ -63,10 +64,12 @@ function fmtTokens(n: number) {
 }
 
 export default function ExecMetrics() {
+  const { can } = useSession();
   const [stats, setStats] = useState<Stats | null>(null);
   const [series, setSeries] = useState<Bucket[]>([]);
   const [runtime, setRuntime] = useState<RuntimeCache | null>(null);
   const [loading, setLoading] = useState(true);
+  const [clearing, setClearing] = useState(false);
 
   const reload = async () => {
     try {
@@ -81,6 +84,24 @@ export default function ExecMetrics() {
     }
   };
   useEffect(() => { reload(); const i = setInterval(reload, 30_000); return () => clearInterval(i); }, []);
+
+  const onClearRuntime = async () => {
+    if (!confirm(
+      "Clear ALL runtime caches (tool results + guardrail verdicts)?\n\n" +
+      "Use only for poisoned cache recovery — entries will rebuild from " +
+      "next call. Audit log records this action."
+    )) return;
+    setClearing(true);
+    try {
+      const r = await api.execRuntimeCacheClear();
+      alert(`Dropped ${r.dropped} cache entries.`);
+      reload();
+    } catch (e: any) {
+      alert(`Failed: ${e.message}`);
+    } finally {
+      setClearing(false);
+    }
+  };
 
   if (loading || !stats) {
     return <div className="flex items-center justify-center h-64"><Loader2 className="h-5 w-5 animate-spin text-amber-400" /></div>;
@@ -179,9 +200,20 @@ export default function ExecMetrics() {
           <h2 className="text-xs uppercase tracking-wider text-muted-foreground">
             Runtime caches (in-process)
           </h2>
-          <span className="text-[10px] text-muted-foreground/60">
-            {runtime ? `captured ${new Date(runtime.capturedAt).toLocaleTimeString()}` : "—"}
-          </span>
+          <div className="flex items-center gap-3">
+            <span className="text-[10px] text-muted-foreground/60">
+              {runtime ? `captured ${new Date(runtime.capturedAt).toLocaleTimeString()}` : "—"}
+            </span>
+            {can("super") && runtime && runtime.namespaces.length > 0 && (
+              <button
+                onClick={onClearRuntime}
+                disabled={clearing}
+                className="flex items-center gap-1.5 rounded-md bg-red-500/10 text-red-400 hover:bg-red-500/20 disabled:opacity-50 px-2 py-1 text-[10px]"
+              >
+                <Trash2 className="h-3 w-3" /> {clearing ? "Clearing…" : "Clear"}
+              </button>
+            )}
+          </div>
         </div>
         {!runtime ? (
           <div className="text-center py-4 text-xs text-muted-foreground">

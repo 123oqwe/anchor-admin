@@ -420,7 +420,8 @@ export const api = {
   execCacheMetrics:    (hours = 24) => req<any>("GET", `/api/admin/exec/cache-metrics?hours=${hours}`),
   execCacheTimeseries: (hours = 24) => req<any[]>("GET", `/api/admin/exec/cache-metrics/timeseries?hours=${hours}`),
   // EXEC-2/5: in-process tool result + guardrail verdict caches
-  execRuntimeCache:    () => req<{ namespaces: any[]; capturedAt: string }>("GET", "/api/admin/exec/runtime-cache-stats"),
+  execRuntimeCache:      () => req<{ namespaces: any[]; capturedAt: string }>("GET", "/api/admin/exec/runtime-cache-stats"),
+  execRuntimeCacheClear: () => req<{ ok: boolean; dropped: number }>("POST", "/api/admin/exec/runtime-cache-clear"),
 
   // Guardrails
   guardrailList:    (params: { detector?: string; verdict?: string; user_id?: string; task?: string } = {}) => {
