@@ -4,7 +4,7 @@ import {
   LayoutDashboard, Users as UsersIcon, Key, FileText, Terminal,
   Activity, BarChart3, Route as RouteIcon, LogOut,
   ShieldCheck, FlaskConical, TrendingUp, Send,
-  ShieldAlert, Bug, Search, Ban, Package, Database, Filter,
+  ShieldAlert, Bug, Search, Ban, Package, Database, Filter, Zap,
 } from "lucide-react";
 import { useSession } from "@/lib/auth";
 
@@ -25,6 +25,7 @@ const adminNav = [
   { path: "/admin/runs",       label: "Run traces",   icon: RouteIcon,       group: "AI Ops" },
   { path: "/admin/traces",     label: "LLM traces",   icon: Filter,          group: "AI Ops" },
   { path: "/admin/cache",      label: "Cache",        icon: Database,        group: "AI Ops" },
+  { path: "/admin/exec-metrics", label: "Exec metrics", icon: Zap,           group: "AI Ops" },
   { path: "/admin/logs",       label: "LLM calls",    icon: Activity,        group: "AI Ops" },
   { path: "/admin/stats",      label: "Stats",        icon: BarChart3,       group: "AI Ops" },
   { path: "/admin/models",        label: "Models",      icon: Database,        group: "AI Ops" },

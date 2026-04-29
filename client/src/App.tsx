@@ -55,6 +55,7 @@ import SecurityGuardrails from "./pages/admin/SecurityGuardrails";
 import Models from "./pages/admin/Models";
 import ModelHealth from "./pages/admin/ModelHealth";
 import Routing from "./pages/admin/Routing";
+import ExecMetrics from "./pages/admin/ExecMetrics";
 
 /**
  * Renders children when an admin session is present; otherwise shows the
@@ -145,6 +146,7 @@ function Router() {
       <Route path="/admin/models"><AdminPage><Models /></AdminPage></Route>
       <Route path="/admin/models/health"><AdminPage><ModelHealth /></AdminPage></Route>
       <Route path="/admin/routing"><AdminPage><Routing /></AdminPage></Route>
+      <Route path="/admin/exec-metrics"><AdminPage><ExecMetrics /></AdminPage></Route>
 
       {/* Data */}
       <Route path="/admin/graph"><AdminPage><GraphAdmin /></AdminPage></Route>

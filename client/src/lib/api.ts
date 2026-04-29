@@ -416,6 +416,10 @@ export const api = {
   cacheEntries: () => req<any[]>("GET", "/api/admin/cache/entries"),
   cacheClear:   () => req<{ ok: boolean; rowsRemoved: number }>("POST", "/api/admin/cache/clear"),
 
+  // EXEC-1: prompt-cache (Anthropic ephemeral) observability
+  execCacheMetrics:    (hours = 24) => req<any>("GET", `/api/admin/exec/cache-metrics?hours=${hours}`),
+  execCacheTimeseries: (hours = 24) => req<any[]>("GET", `/api/admin/exec/cache-metrics/timeseries?hours=${hours}`),
+
   // Guardrails
   guardrailList:    (params: { detector?: string; verdict?: string; user_id?: string; task?: string } = {}) => {
     const q = new URLSearchParams(Object.entries(params).filter(([, v]) => v).map(([k, v]) => [k, String(v)])).toString();
